@@ -1,15 +1,37 @@
-import { useState } from "react";
-import { motion } from "motion/react";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import { Menu, Settings, Bell } from "lucide-react";
 import { useNavigate } from "react-router";
 import { WelcomeScreen } from "../components/WelcomeScreen";
-import { InsightsSidebar } from "../components/InsightsSidebar";
 import { AIChat } from "../components/AIChat";
-import { AgendaSidebar } from "../components/AgendaSidebar";
 import { SideMenu } from "../components/SideMenu";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 export function Home() {
   const navigate = useNavigate();
+  const [isMobile, setIsMobile] = useState(false);
+  const { t } = useLanguage();
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    // Fix for mobile address bar height
+    const setHeight = () => {
+      document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+    };
+    setHeight();
+    window.addEventListener('resize', setHeight);
+
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('resize', setHeight);
+    };
+  }, []);
+
   // Check localStorage to see if user has already dismissed the welcome screen
   const [showWelcome, setShowWelcome] = useState(() => {
     return localStorage.getItem("hasSeenWelcome") !== "true";
@@ -26,93 +48,163 @@ export function Home() {
   }
 
   return (
-    <div className="relative h-screen overflow-hidden bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900">
+    <div
+      className="relative flex flex-col overflow-hidden bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900"
+      style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
+    >
       <SideMenu isOpen={menuOpen} onClose={() => setMenuOpen(false)} />
 
-      {/* Background Effects */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Animated glows */}
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-600/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '1s' }} />
-        <div className="absolute top-1/2 right-1/3 w-96 h-96 bg-pink-600/20 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
+      {/* Background Effects - Simplified for maximum performance */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_0%,rgba(30,120,255,0.15),transparent_50%)]" />
+        {!isMobile && (
+          <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(circle_at_80%_80%,rgba(0,100,255,0.1),transparent_50%)]" />
+        )}
 
-        {/* Subtle stars */}
-        {Array.from({ length: 30 }).map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 bg-white/30 rounded-full"
-            style={{
-              top: `${Math.random() * 100}%`,
-              left: `${Math.random() * 100}%`,
-            }}
-            animate={{
-              opacity: [0.2, 0.8, 0.2],
-            }}
-            transition={{
-              duration: 3 + Math.random() * 2,
-              repeat: Infinity,
-              delay: Math.random() * 2,
-            }}
-          />
-        ))}
+        {/* Simple CSS-only stars for better performance */}
+        <div className="stars-container opacity-30">
+          {Array.from({ length: isMobile ? 10 : 25 }).map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-0.5 h-0.5 bg-white rounded-full animate-pulse"
+              style={{
+                top: `${Math.random() * 100}%`,
+                left: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 5}s`,
+                animationDuration: `${3 + Math.random() * 2}s`
+              }}
+            />
+          ))}
+        </div>
       </div>
 
-      {/* Top Navigation Bar */}
-      <div className="absolute top-0 left-0 right-0 z-30">
-        <div className="bg-white/5 backdrop-blur-xl border-b border-white/10">
-          <div className="max-w-[2000px] mx-auto px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setMenuOpen(true)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-              >
-                <Menu className="w-5 h-5 text-white" />
-              </button>
-              <div className="flex items-center gap-3">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                  className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-blue-500 flex items-center justify-center"
-                >
-                  <span className="text-white text-sm font-bold">AI</span>
-                </motion.div>
-                <div>
-                  <h1 className="text-white font-semibold text-sm">AI Travel Assistant</h1>
-                  <p className="text-gray-400 text-xs">Tu compañero de viajes inteligente</p>
-                </div>
+      {/* Top Navigation Bar - Now relative in flex col */}
+      <header className="relative z-30 flex-shrink-0 bg-slate-950/40 backdrop-blur-3xl border-b border-white/5">
+        <div className="max-w-[2000px] mx-auto px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3 md:gap-4">
+            <button
+              onClick={() => setMenuOpen(true)}
+              className="p-2 hover:bg-white/5 active:scale-95 rounded-lg transition-all"
+              aria-label="Menu"
+            >
+              <Menu className="w-5 h-5 text-white/80" />
+            </button>
+            <div className="flex items-center gap-2 md:gap-3">
+              <div className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-gradient-to-br from-blue-500 via-cyan-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <span className="text-white text-[10px] md:text-xs font-bold font-mono">MTA</span>
               </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button className="p-2 hover:bg-white/10 rounded-lg transition-colors relative">
-                <Bell className="w-5 h-5 text-white" />
-                <div className="absolute top-1 right-1 w-2 h-2 bg-pink-500 rounded-full" />
-              </button>
-              <button className="p-2 hover:bg-white/10 rounded-lg transition-colors">
-                <Settings className="w-5 h-5 text-white" />
-              </button>
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center cursor-pointer">
-                <span className="text-white text-sm font-semibold">V</span>
+              <div>
+                <h1 className="text-white font-semibold text-xs md:text-sm leading-tight">My Travel Assistance</h1>
+                <p className="text-gray-400 text-[10px] leading-tight sm:block hidden">{t('home.tagline')}</p>
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Main Content - Solo Chat */}
-      <div className="relative h-full pt-[73px] max-w-[2000px] mx-auto">
-        <div className="h-full flex flex-col">
-          {/* Centered AI Chat taking full width/height */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="flex-1 relative"
-          >
-            <AIChat />
-          </motion.div>
+          <div className="flex items-center gap-1.5 md:gap-3">
+            {/* Notifications */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setShowNotifications(!showNotifications);
+                  setShowUserMenu(false);
+                }}
+                className={`p-2 hover:bg-white/5 active:scale-95 rounded-lg transition-all relative ${showNotifications ? 'bg-white/10' : ''}`}
+              >
+                <Bell className="w-4 h-4 md:w-5 md:h-5 text-white/80" />
+                <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-cyan-500 rounded-full ring-2 ring-slate-950" />
+              </button>
+
+              <AnimatePresence>
+                {showNotifications && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute right-0 mt-2 w-72 md:w-80 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden"
+                    >
+                      <div className="p-4 border-b border-white/5 bg-white/5">
+                        <h3 className="text-sm font-bold text-white">{t('home.notificationsTitle')}</h3>
+                      </div>
+                      <div className="p-8 text-center">
+                        <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <Bell className="w-6 h-6 text-gray-600" />
+                        </div>
+                        <p className="text-xs text-gray-500">{t('home.noNotifications')}</p>
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Settings */}
+            <button
+              onClick={() => navigate("/settings")}
+              className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+            >
+              <Settings className="w-4 h-4 md:w-5 md:h-5 text-white/80" />
+            </button>
+
+            {/* User Avatar & Menu */}
+            <div className="relative">
+              <div
+                onClick={() => {
+                  setShowUserMenu(!showUserMenu);
+                  setShowNotifications(false);
+                }}
+                className={`w-8 h-8 md:w-9 md:h-9 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center cursor-pointer border border-white/10 shadow-lg hover:scale-105 active:scale-95 transition-all ${showUserMenu ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-slate-950' : ''}`}
+              >
+                <span className="text-white text-xs font-bold font-mono">V</span>
+              </div>
+
+              <AnimatePresence>
+                {showUserMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute right-0 mt-2 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden"
+                    >
+                      <div className="p-4 border-b border-white/5 flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                          <span className="text-white text-[10px] font-bold">V</span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-white truncate">Viajero</p>
+                          <p className="text-[10px] text-gray-500 truncate">@traveler</p>
+                        </div>
+                      </div>
+                      <div className="p-1">
+                        <button
+                          onClick={() => {
+                            localStorage.removeItem("hasSeenWelcome");
+                            window.location.reload();
+                          }}
+                          className="w-full flex items-center gap-2 p-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-sm font-medium"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-red-400/10 flex items-center justify-center">
+                            <Menu className="w-4 h-4 rotate-180" /> {/* Reusing Menu as Logout icon for simplicity */}
+                          </div>
+                          {t('home.logout')}
+                        </button>
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
         </div>
-      </div>
+      </header>
+
+      {/* Main Content - Full Height Chat Area */}
+      <main className="relative flex-1 flex flex-col min-h-0 z-10 max-w-[2000px] w-full mx-auto">
+        <AIChat />
+      </main>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Clock } from "lucide-react";
 import { useNavigate } from "react-router";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 interface TripEvent {
   id: number;
@@ -13,7 +14,8 @@ interface TripEvent {
 
 export function Calendar() {
   const navigate = useNavigate();
-  const [currentMonth, setCurrentMonth] = useState("Marzo 2026");
+  const { lang, t } = useLanguage();
+  const [currentDate, setCurrentDate] = useState(new Date());
 
   const upcomingTrips: TripEvent[] = [
     {
@@ -21,42 +23,55 @@ export function Calendar() {
       destination: "París, Francia",
       dates: "15-20 Marzo",
       image: "https://images.unsplash.com/photo-1642947392578-b37fbd9a4d45?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwYXJpcyUyMGVpZmZlbCUyMHRvd2VyJTIwc3Vuc2V0fGVufDF8fHx8MTc3Mzc1Mzc5MXww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      color: "purple",
+      color: "blue",
     },
     {
       id: 2,
       destination: "Tokio, Japón",
       dates: "5-12 Abril",
       image: "https://images.unsplash.com/photo-1679097844800-b0cb637306ee?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx0b2t5byUyMGphcGFuJTIwc3RyZWV0JTIwbmlnaHR8ZW58MXx8fHwxNzczODA1NjUwfDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      color: "pink",
+      color: "cyan",
     },
     {
       id: 3,
       destination: "Barcelona, España",
       dates: "20-25 Mayo",
       image: "https://images.unsplash.com/photo-1741304787559-a392853b613b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiYXJjZWxvbmElMjBhcmNoaXRlY3R1cmUlMjBnYXVkaXxlbnwxfHx8fDE3NzM3MTY5NjV8MA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-      color: "blue",
+      color: "indigo",
     },
   ];
 
-  const daysInMonth = Array.from({ length: 31 }, (_, i) => i + 1);
-  const firstDayOffset = 2; // March 2026 starts on Sunday (offset for layout)
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const monthName = currentDate.toLocaleString(lang === 'es' ? 'es-ES' : 'en-US', { month: 'long', year: 'numeric' });
 
-  // Days with trips (for highlighting)
-  const tripDays = [15, 16, 17, 18, 19, 20];
+  const getDaysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
+  const getFirstDayOffset = (y: number, m: number) => {
+    let day = new Date(y, m, 1).getDay();
+    return day; // 0 for Sunday
+  };
+
+  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+
+  const daysInMonth = Array.from({ length: getDaysInMonth(year, month) }, (_, i) => i + 1);
+  const firstDayOffset = getFirstDayOffset(year, month);
+
+  // Days with trips (for highlighting) - only for demonstration month
+  const tripDays = month === 2 ? [15, 16, 17, 18, 19, 20] : [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-indigo-50">
       {/* Header */}
       <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => navigate("/")}
-            className="p-2 hover:bg-purple-100/50 rounded-lg transition-colors"
+            className="p-2 hover:bg-blue-100/50 rounded-lg transition-colors"
           >
-            <ArrowLeft className="w-6 h-6 text-gray-700" />
+            <ArrowLeft className="w-6 h-6 text-slate-700" />
           </button>
-          <h1 className="font-semibold text-gray-900">Calendario de Viajes</h1>
+          <h1 className="font-semibold text-slate-900">{t('calendar.title')}</h1>
           <div className="w-10" />
         </div>
       </div>
@@ -70,19 +85,29 @@ export function Calendar() {
         >
           {/* Calendar Header */}
           <div className="flex items-center justify-between mb-6">
-            <button className="p-2 hover:bg-purple-100/50 rounded-lg transition-colors">
-              <ChevronLeft className="w-5 h-5 text-gray-700" />
+            <button
+              onClick={prevMonth}
+              className="p-2 hover:bg-blue-100/50 rounded-lg transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5 text-slate-700" />
             </button>
-            <h2 className="font-semibold text-gray-900">{currentMonth}</h2>
-            <button className="p-2 hover:bg-purple-100/50 rounded-lg transition-colors">
-              <ChevronRight className="w-5 h-5 text-gray-700" />
+            <h2 className="font-semibold text-slate-900 capitalize">{monthName}</h2>
+            <button
+              onClick={nextMonth}
+              className="p-2 hover:bg-blue-100/50 rounded-lg transition-colors"
+            >
+              <ChevronRight className="w-5 h-5 text-slate-700" />
             </button>
           </div>
 
           {/* Days of week */}
           <div className="grid grid-cols-7 gap-2 mb-2">
-            {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((day) => (
-              <div key={day} className="text-center text-xs font-medium text-gray-500 py-2">
+            {[
+              t('calendar.days.sun'), t('calendar.days.mon'), t('calendar.days.tue'),
+              t('calendar.days.wed'), t('calendar.days.thu'), t('calendar.days.fri'),
+              t('calendar.days.sat')
+            ].map((day) => (
+              <div key={day} className="text-center text-xs font-medium text-slate-500 py-2">
                 {day}
               </div>
             ))}
@@ -98,18 +123,19 @@ export function Calendar() {
             {/* Days */}
             {daysInMonth.map((day) => {
               const hasTrip = tripDays.includes(day);
+              const isToday = day === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear();
+
               return (
                 <motion.button
                   key={day}
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
-                  className={`aspect-square flex items-center justify-center rounded-lg text-sm font-medium transition-all ${
-                    hasTrip
-                      ? "bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg"
-                      : day === 18
-                      ? "bg-purple-100 text-purple-900 border-2 border-purple-500"
-                      : "hover:bg-gray-100 text-gray-700"
-                  }`}
+                  className={`aspect-square flex items-center justify-center rounded-lg text-sm font-medium transition-all ${hasTrip
+                      ? "bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-lg"
+                      : isToday
+                        ? "bg-blue-100 text-blue-900 border-2 border-blue-500"
+                        : "hover:bg-slate-100 text-slate-700"
+                    }`}
                 >
                   {day}
                 </motion.button>
@@ -150,10 +176,10 @@ export function Calendar() {
                     </div>
 
                     <div className="flex gap-2 mt-3">
-                      <button className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow">
+                      <button className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-2 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow">
                         Ver detalles
                       </button>
-                      <button className="px-4 py-2 border border-purple-200 text-purple-600 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors">
+                      <button className="px-4 py-2 border border-blue-200 text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors">
                         Editar
                       </button>
                     </div>

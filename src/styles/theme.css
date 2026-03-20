@@ -179,3 +179,24 @@
     line-height: 1.5;
   }
 }
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .mask-linear-right {
+    mask-image: linear-gradient(to right, black 85%, transparent 100%);
+  }
+  
+  .optimize-gpu {
+    backface-visibility: hidden;
+    perspective: 1000px;
+    transform: translateZ(0);
+    will-change: transform;
+  }
+}

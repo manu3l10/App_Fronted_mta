@@ -1,6 +1,8 @@
 import { motion, AnimatePresence } from "motion/react";
 import { X, User, Calendar, Camera, Heart, FileText, Settings, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router";
+import { useState, useEffect } from "react";
+import { useLanguage } from "../../contexts/LanguageContext";
 
 interface SideMenuProps {
   isOpen: boolean;
@@ -9,14 +11,23 @@ interface SideMenuProps {
 
 export function SideMenu({ isOpen, onClose }: SideMenuProps) {
   const navigate = useNavigate();
+  const [isMobile, setIsMobile] = useState(false);
+  const { t } = useLanguage();
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const menuItems = [
-    { icon: User, label: "Perfil", path: "/profile", color: "from-purple-500 to-purple-600" },
-    { icon: Calendar, label: "Calendario", path: "/calendar", color: "from-blue-500 to-blue-600" },
-    { icon: Camera, label: "Comunidad", path: "/community", color: "from-pink-500 to-pink-600" },
-    { icon: FileText, label: "Mis itinerarios", path: "/itineraries", color: "from-cyan-500 to-cyan-600" },
-    { icon: Heart, label: "Favoritos", path: "/favorites", color: "from-rose-500 to-rose-600" },
-    { icon: Settings, label: "Configuración", path: "/settings", color: "from-slate-500 to-slate-600" },
+    { icon: User, label: t('menu.profile'), path: "/profile", color: "from-blue-500 to-blue-600" },
+    { icon: Calendar, label: t('menu.calendar'), path: "/calendar", color: "from-cyan-500 to-cyan-600" },
+    { icon: Camera, label: t('menu.community'), path: "/community", color: "from-indigo-500 to-indigo-600" },
+    { icon: FileText, label: t('menu.itineraries'), path: "/itineraries", color: "from-blue-600 to-blue-700" },
+    { icon: Heart, label: t('menu.favorites'), path: "/favorites", color: "from-cyan-600 to-cyan-700" },
+    { icon: Settings, label: t('menu.settings'), path: "/settings", color: "from-slate-500 to-slate-600" },
   ];
 
   const handleNavigation = (path: string) => {
@@ -28,121 +39,105 @@ export function SideMenu({ isOpen, onClose }: SideMenuProps) {
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
+          {/* Backdrop - No blur on mobile for fluid performance */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+            className={`fixed inset-0 bg-black/50 z-40 ${!isMobile ? 'backdrop-blur-sm' : ''}`}
           />
 
-          {/* Menu */}
+          {/* Menu - Optimized slider */}
           <motion.div
-            initial={{ x: -320 }}
+            initial={{ x: "-100%" }}
             animate={{ x: 0 }}
-            exit={{ x: -320 }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="fixed left-0 top-0 h-full w-80 z-50"
+            exit={{ x: "-100%" }}
+            transition={isMobile ? { duration: 0.25, ease: "easeOut" } : { type: "spring", damping: 25, stiffness: 300 }}
+            className="fixed left-0 top-0 h-full w-[280px] md:w-80 z-50 shadow-2xl overflow-hidden"
+            style={{ willChange: "transform" }}
           >
-            {/* Glass effect container with dark theme */}
-            <div className="h-full bg-gradient-to-br from-slate-900/95 via-purple-900/95 to-slate-900/95 backdrop-blur-2xl border-r border-white/10 shadow-2xl">
-              {/* Background effects */}
-              <div className="absolute inset-0 overflow-hidden">
-                <div className="absolute top-1/4 left-1/4 w-48 h-48 bg-purple-600/20 rounded-full blur-[80px]" />
-                <div className="absolute bottom-1/4 right-1/4 w-48 h-48 bg-pink-600/20 rounded-full blur-[80px]" />
-              </div>
+            {/* Background container */}
+            <div className="h-full bg-slate-900 border-r border-white/5 flex flex-col">
 
-              {/* Content */}
-              <div className="relative h-full flex flex-col">
+              {/* Simplified background for mobile performance */}
+              {!isMobile && (
+                <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
+                  <div className="absolute top-1/4 left-1/4 w-48 h-48 bg-blue-600 rounded-full blur-[80px]" />
+                  <div className="absolute bottom-1/4 right-1/4 w-48 h-48 bg-cyan-600 rounded-full blur-[80px]" />
+                </div>
+              )}
+
+              {/* Content wrapper */}
+              <div className="relative h-full flex flex-col z-10">
                 {/* Header */}
-                <div className="p-6 border-b border-white/10">
-                  <div className="flex items-center justify-between mb-4">
+                <div className="p-5 md:p-6 border-b border-white/5">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/50">
-                        <User className="w-6 h-6 text-white" />
+                      <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-slate-800 flex items-center justify-center border border-white/10 shadow-lg shadow-blue-500/10">
+                        <User className="w-5 h-5 md:w-6 md:h-6 text-white" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-white">Viajero</h3>
-                        <p className="text-sm text-gray-400">@traveler</p>
+                        <h3 className="font-bold text-white text-sm md:text-base">{t('menu.user')}</h3>
+                        <p className="text-[10px] md:text-xs text-gray-500">@traveler</p>
                       </div>
                     </div>
                     <button
                       onClick={onClose}
-                      className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                      className="p-2 hover:bg-white/5 active:scale-90 rounded-lg transition-all"
+                      aria-label="Cerrar"
                     >
-                      <X className="w-5 h-5 text-gray-300" />
+                      <X className="w-5 h-5 text-gray-400" />
                     </button>
                   </div>
 
-                  {/* Stats */}
-                  <div className="grid grid-cols-3 gap-2 mt-4">
-                    <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
-                      <p className="text-lg font-semibold text-white">12</p>
-                      <p className="text-xs text-gray-400">Países</p>
-                    </div>
-                    <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
-                      <p className="text-lg font-semibold text-white">28</p>
-                      <p className="text-xs text-gray-400">Viajes</p>
-                    </div>
-                    <div className="bg-white/5 rounded-lg p-2 text-center border border-white/10">
-                      <p className="text-lg font-semibold text-white">15</p>
-                      <p className="text-xs text-gray-400">Badges</p>
-                    </div>
+                  {/* Stats - Simplified */}
+                  <div className="grid grid-cols-3 gap-2 mt-5">
+                    {[
+                      { val: "8", label: t('menu.stats.deptos') },
+                      { val: "24", label: t('menu.stats.planes') },
+                      { val: "12", label: t('menu.stats.logros') }
+                    ].map((stat) => (
+                      <div key={stat.label} className="bg-white/5 rounded-lg p-2 text-center border border-white/5">
+                        <p className="text-sm font-bold text-white">{stat.val}</p>
+                        <p className="text-[10px] text-gray-500">{stat.label}</p>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
-                {/* Menu Items */}
-                <nav className="flex-1 p-4 overflow-y-auto">
+                {/* Menu Items - Optimized transitions */}
+                <nav className="flex-1 p-3 md:p-4 overflow-y-auto custom-scrollbar no-scrollbar">
                   {menuItems.map((item, index) => {
                     const Icon = item.icon;
                     return (
-                      <motion.button
+                      <button
                         key={item.path}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
                         onClick={() => handleNavigation(item.path)}
-                        whileHover={{ scale: 1.02, x: 5 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-white/10 transition-all group mb-2 relative overflow-hidden"
+                        className="w-full h-12 md:h-14 flex items-center gap-4 px-3 rounded-xl hover:bg-white/5 active:bg-white/10 transition-colors group mb-1.5"
                       >
-                        {/* Hover glow effect */}
-                        <div className={`absolute inset-0 bg-gradient-to-r ${item.color} opacity-0 group-hover:opacity-10 transition-opacity rounded-xl`} />
-                        
-                        <div className={`relative w-10 h-10 rounded-lg bg-gradient-to-br ${item.color} flex items-center justify-center shadow-lg`}>
-                          <Icon className="w-5 h-5 text-white" />
+                        <div className={`w-8 h-8 md:w-10 md:h-10 rounded-lg bg-gradient-to-br ${item.color} flex items-center justify-center opacity-90 group-hover:opacity-100 transition-opacity shadow-lg`}>
+                          <Icon className="w-4 h-4 md:w-5 md:h-5 text-white" />
                         </div>
-                        <span className="relative font-medium text-white">{item.label}</span>
-                      </motion.button>
+                        <span className="font-medium text-white/80 group-hover:text-white transition-colors text-sm md:text-base">{item.label}</span>
+                      </button>
                     );
                   })}
                 </nav>
 
-                {/* Footer */}
-                <div className="p-4 border-t border-white/10">
-                  <motion.div
-                    whileHover={{ scale: 1.02 }}
-                    className="bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 rounded-xl p-4 text-white relative overflow-hidden cursor-pointer"
-                  >
-                    {/* Animated background */}
-                    <motion.div
-                      animate={{
-                        backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
-                      }}
-                      transition={{ duration: 5, repeat: Infinity }}
-                      className="absolute inset-0 bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 opacity-50"
-                      style={{ backgroundSize: '200% 200%' }}
-                    />
-                    
-                    <div className="relative">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Sparkles className="w-5 h-5" />
-                        <p className="font-semibold">Premium</p>
+                {/* Footer - Static Premium Card on Mobile */}
+                <div className="p-4 md:p-5 border-t border-white/5">
+                  <div className="relative overflow-hidden bg-gradient-to-r from-blue-500 to-cyan-600 rounded-xl p-4 cursor-pointer active:scale-95 transition-transform">
+                    <div className="relative flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-md flex items-center justify-center">
+                        <Sparkles className="w-4 h-4 text-white" />
                       </div>
-                      <p className="text-xs opacity-90">Desbloquea funciones exclusivas</p>
+                      <div>
+                        <p className="font-bold text-white text-xs md:text-sm">{t('menu.premium')}</p>
+                        <p className="text-[10px] text-white/70">{t('menu.premiumFull')}</p>
+                      </div>
                     </div>
-                  </motion.div>
+                  </div>
                 </div>
               </div>
             </div>

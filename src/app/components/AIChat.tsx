@@ -2,25 +2,29 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, Sparkles, Mic } from "lucide-react";
 import { ChatMessage } from "./ChatMessage";
+import { useLanguage } from "../../contexts/LanguageContext";
 import { ItineraryCard } from "./ItineraryCard";
 import { HotelCard } from "./HotelCard";
 import { RestaurantCard } from "./RestaurantCard";
 import { MapPreview } from "./MapPreview";
 
 export function AIChat() {
+  const { t, lang } = useLanguage();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<any[]>([
     {
       type: "ai",
-      content: "✨ Hola, soy tu asistente personal de viajes. ¿A dónde te gustaría viajar?",
+      content: lang === 'es'
+        ? "✨ Hola, soy tu asistente personal de viajes. ¿A dónde te gustaría viajar?"
+        : "✨ Hi, I'm your personal travel assistant. Where would you like to travel?",
     },
   ]);
 
   const suggestions = [
-    "Viaje de 5 días a París",
-    "Plan barato en Colombia",
-    "Viaje romántico",
-    "Aventura en Tokio",
+    t('chat.suggestion1'),
+    t('chat.suggestion2'),
+    t('chat.suggestion3'),
+    t('chat.suggestion4'),
   ];
 
   const handleSend = () => {
@@ -30,72 +34,96 @@ export function AIChat() {
     setMessages((prev) => [...prev, userMessage]);
 
     setTimeout(() => {
+      const lowerInput = input.toLowerCase();
       let aiResponse: any = {
         type: "ai",
-        content: "¡Perfecto! He creado un itinerario personalizado para ti:",
+        content: t('chat.aiResponsePrefix'),
       };
 
-      if (input.toLowerCase().includes("parís") || input.toLowerCase().includes("paris")) {
+      if (lowerInput.includes("cartagena")) {
         aiResponse.card = (
           <div className="space-y-4">
             <ItineraryCard
-              destination="París, Francia"
-              duration="5 días"
-              budget="$1,500 - $2,000"
+              destination="Cartagena de Indias"
+              duration="3 días"
+              budget="$800.000 - $1.200.000 COP"
               days={[
                 {
                   day: 1,
-                  title: "Llegada y Torre Eiffel",
+                  title: "Ciudad Amurallada y Getsemaní",
                   time: "Todo el día",
                   activities: [
-                    "Check-in en el hotel",
-                    "Visita a la Torre Eiffel al atardecer",
-                    "Cena en restaurante local",
+                    "Caminata por el Centro Histórico",
+                    "Atardecer en las Murallas (Café del Mar)",
+                    "Cena en el barrio Getsemaní",
                   ],
                 },
                 {
                   day: 2,
-                  title: "Louvre y Champs-Élysées",
-                  time: "9:00 - 20:00",
+                  title: "Islas del Rosario",
+                  time: "8:00 - 16:00",
                   activities: [
-                    "Museo del Louvre (Mona Lisa)",
-                    "Paseo por Jardín de las Tullerías",
-                    "Shopping en Champs-Élysées",
+                    "Tour en lancha a las islas",
+                    "Snorkeling en aguas cristalinas",
+                    "Almuerzo típico caribeño",
                   ],
                 },
                 {
                   day: 3,
-                  title: "Montmartre y Sacré-Cœur",
-                  time: "10:00 - 19:00",
+                  title: "Castillo San Felipe y Popa",
+                  time: "9:00 - 13:00",
                   activities: [
-                    "Barrio de Montmartre",
-                    "Basílica del Sacré-Cœur",
-                    "Place du Tertre (artistas)",
+                    "Visita al Castillo de San Felipe",
+                    "Vista panorámica desde el Convento de la Popa",
                   ],
                 },
               ]}
             />
-            <MapPreview location="París, Francia" coordinates="48.8566° N, 2.3522° E" />
+            <MapPreview location="Cartagena, Colombia" coordinates="10.3910° N, 75.4794° W" />
           </div>
         );
-      } else if (input.toLowerCase().includes("colombia")) {
+      } else if (lowerInput.includes("medellín") || lowerInput.includes("medellin")) {
+        aiResponse.card = (
+          <div className="space-y-4">
+            <ItineraryCard
+              destination="Medellín y Guatapé"
+              duration="4 días"
+              budget="$700.000 - $1.100.000 COP"
+              days={[
+                {
+                  day: 1,
+                  title: "Transformación Social",
+                  time: "Tarde",
+                  activities: ["Tour Comuna 13", "Metrocable", "Plaza Botero"],
+                },
+                {
+                  day: 2,
+                  title: "Pueblo de Zócalos",
+                  time: "Todo el día",
+                  activities: ["Piedra del Peñol (740 escalones)", "Pueblo de Guatapé", "Paseo en lancha"],
+                },
+              ]}
+            />
+          </div>
+        );
+      } else {
         aiResponse.card = (
           <ItineraryCard
-            destination="Colombia"
-            duration="7 días"
-            budget="$800 - $1,200"
+            destination="Eje Cafetero"
+            duration="4 días"
+            budget="$600.000 - $1.000.000 COP"
             days={[
               {
                 day: 1,
-                title: "Bogotá - Centro Histórico",
+                title: "Valle de Cocora",
                 time: "Todo el día",
-                activities: ["La Candelaria", "Museo del Oro", "Cerro de Monserrate"],
+                activities: ["Caminata entre Palmas de Cera", "Salento (Calle Real)", "Miradores"],
               },
               {
                 day: 2,
-                title: "Eje Cafetero",
-                time: "8:00 - 18:00",
-                activities: ["Tour cafetero", "Valle de Cocora", "Pueblos típicos"],
+                title: "Cultura Cafetera",
+                time: "9:00 - 17:00",
+                activities: ["Tour en finca cafetera", "Proceso del café", "Cata de café especial"],
               },
             ]}
           />
@@ -109,22 +137,22 @@ export function AIChat() {
           ...prev,
           {
             type: "ai",
-            content: "También te recomiendo estos hoteles y restaurantes:",
+            content: "Aquí tienes algunas opciones recomendadas de alojamiento y gastronomía en la zona:",
             card: (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <HotelCard
-                  name="Le Grand Hotel"
-                  location="Centro de París"
-                  rating={4.8}
-                  price="$250"
+                  name="Casa San Agustín"
+                  location="Centro Histórico"
+                  rating={4.9}
+                  price="$850.000"
                   image="https://images.unsplash.com/photo-1578683010236-d716f9a3f461?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBob3RlbCUyMHJvb218ZW58MXx8fHwxNzczNzIxNzU3fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
-                  amenities={["wifi", "breakfast", "gym"]}
+                  amenities={["wifi", "breakfast", "pool"]}
                 />
                 <RestaurantCard
-                  name="Le Petit Bistro"
-                  cuisine="Francesa"
-                  location="Barrio Latino"
-                  rating={4.6}
+                  name="Carmen Restaurant"
+                  cuisine="Contemporánea Colombiana"
+                  location="El Poblado / Cartagena"
+                  rating={4.8}
                   hours="12:00 - 23:00"
                   image="https://images.unsplash.com/photo-1717158776685-d4b7c346e1a7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxyZXN0YXVyYW50JTIwZm9vZCUyMHBsYXR0ZXJ8ZW58MXx8fHwxNzczNjg1NDc2fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
                 />
@@ -145,25 +173,25 @@ export function AIChat() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Chat Header */}
-      <div className="flex-shrink-0 px-6 py-4 border-b border-white/10 bg-white/5 backdrop-blur-xl">
-        <div className="flex items-center gap-3">
+      {/* Chat Header - Smaller on mobile */}
+      <div className="flex-shrink-0 px-4 md:px-6 py-3 md:py-4 border-b border-white/10 bg-slate-900/40 backdrop-blur-xl">
+        <div className="flex items-center gap-2 md:gap-3">
           <motion.div
             animate={{ rotate: [0, 360] }}
-            transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-            className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-blue-500 flex items-center justify-center"
+            transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+            className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-blue-500 via-cyan-500 to-indigo-500 flex items-center justify-center shadow-lg"
           >
-            <Sparkles className="w-5 h-5 text-white" />
+            <span className="text-white text-[8px] md:text-[10px] font-bold">MTA</span>
           </motion.div>
           <div>
-            <h2 className="font-semibold text-white">Asistente IA</h2>
-            <p className="text-xs text-gray-400">Siempre listo para ayudarte</p>
+            <h2 className="font-semibold text-white text-sm md:text-base">{t('chat.header')}</h2>
+            <p className="text-[10px] md:text-xs text-gray-400">{t('chat.subheader')}</p>
           </div>
         </div>
       </div>
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+      {/* Messages Area - Responsive padding */}
+      <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-6 space-y-4 md:space-y-6">
         {messages.map((message, index) => (
           <ChatMessage
             key={index}
@@ -174,63 +202,67 @@ export function AIChat() {
         ))}
       </div>
 
-      {/* Input Area */}
-      <div className="flex-shrink-0 px-6 py-4 border-t border-white/10 bg-white/5 backdrop-blur-xl">
-        {/* Suggestions */}
+      {/* Input Area - Adjusted for mobile keyboards */}
+      <div className="flex-shrink-0 px-4 md:px-6 py-3 md:py-4 border-t border-white/10 bg-slate-900/40 backdrop-blur-xl">
+        {/* Suggestions - Horizontal scroll on mobile */}
         <AnimatePresence>
           {messages.length <= 1 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="mb-4 flex flex-wrap gap-2"
+              className="mb-3 md:mb-4 flex overflow-x-auto no-scrollbar pb-1 gap-2 mask-linear-right"
             >
-              {suggestions.map((suggestion, index) => (
-                <motion.button
-                  key={suggestion}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: index * 0.1 }}
-                  onClick={() => handleSuggestionClick(suggestion)}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-sm font-medium text-white transition-all"
-                >
-                  {suggestion}
-                </motion.button>
-              ))}
+              <div className="flex gap-2 min-w-max pr-4">
+                {suggestions.map((suggestion, index) => (
+                  <motion.button
+                    key={suggestion}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.05 }}
+                    onClick={() => handleSuggestionClick(suggestion)}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="px-3 md:px-4 py-1.5 md:py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-[11px] md:text-sm font-medium text-white/90 transition-all whitespace-nowrap"
+                  >
+                    {suggestion}
+                  </motion.button>
+                ))}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Input */}
+        {/* Input - More compact on mobile */}
         <div className="relative">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Cuéntame tu plan de viaje..."
-            className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+            placeholder={t('chat.inputPlaceholder')}
+            className="w-full pl-4 pr-24 md:pr-28 py-3.5 md:py-4 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl text-white text-sm md:text-base placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all"
           />
-          
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+
+          <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 md:gap-2">
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+              className="p-1.5 md:p-2 hover:bg-white/10 rounded-lg transition-colors"
+              aria-label="Voz"
             >
-              <Mic className="w-5 h-5 text-gray-400" />
+              <Mic className="w-4 h-4 md:w-5 md:h-5 text-gray-500" />
             </motion.button>
-            
+
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={handleSend}
               disabled={!input.trim()}
-              className="p-3 bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
+              className="p-2.5 md:p-3 bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 rounded-lg md:rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-500/20"
+              aria-label="Enviar"
             >
-              <Send className="w-5 h-5 text-white" />
+              <Send className="w-4 h-4 md:w-5 md:h-5 text-white" />
             </motion.button>
           </div>
         </div>
