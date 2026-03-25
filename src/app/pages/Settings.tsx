@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Bell,
   Globe,
-  Moon,
   Shield,
   CreditCard,
   HelpCircle,
@@ -19,7 +18,6 @@ export function Settings() {
   const navigate = useNavigate();
   const { lang, setLang, t } = useLanguage();
   const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(true);
   const [showLangModal, setShowLangModal] = useState(false);
 
   interface SettingsItem {
@@ -45,7 +43,6 @@ export function Settings() {
           onClick: () => setShowLangModal(true)
         },
         { icon: Bell, label: t('settings.notifications'), toggle: true, state: notifications, setState: setNotifications },
-        { icon: Moon, label: t('settings.darkMode'), toggle: true, state: darkMode, setState: setDarkMode },
       ],
     },
     {
