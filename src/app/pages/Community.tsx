@@ -11,6 +11,8 @@ import {
   updateCommunityPost,
 } from "../../lib/communityApi";
 
+const POST_COOLDOWN_MS = 8000;
+
 interface Comment {
   id: number;
   username: string;
@@ -60,11 +62,18 @@ export function Community() {
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [activePostMenu, setActivePostMenu] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [isSubmittingPost, setIsSubmittingPost] = useState(false);
+  const [publishCooldownUntil, setPublishCooldownUntil] = useState(0);
+  const [cooldownTick, setCooldownTick] = useState(0);
   const [newPost, setNewPost] = useState({
     location: "",
     caption: "",
     image: "",
   });
+
+  const nowMs = Date.now() + cooldownTick * 0;
+  const isPublishCooldownActive = !editingPost && nowMs < publishCooldownUntil;
+  const publishCooldownSeconds = Math.max(0, Math.ceil((publishCooldownUntil - nowMs) / 1000));
 
   const fetchPosts = async () => {
     setIsLoading(true);
@@ -85,6 +94,16 @@ export function Community() {
   useEffect(() => {
     fetchPosts();
   }, []);
+
+  useEffect(() => {
+    if (!isPublishCooldownActive) return;
+
+    const interval = window.setInterval(() => {
+      setCooldownTick((prev) => prev + 1);
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [isPublishCooldownActive]);
 
   const toggleLike = (id: string) => {
     setPosts((prev) =>
@@ -137,12 +156,19 @@ export function Community() {
   };
 
   const createPost = async () => {
+    if (isSubmittingPost) return;
+
+    if (Date.now() < publishCooldownUntil) {
+      return;
+    }
+
     const location = newPost.location.trim();
     const caption = newPost.caption.trim();
     const image = newPost.image.trim();
     if (!location || !caption || !image) return;
 
     try {
+      setIsSubmittingPost(true);
       const createdRecord = await createCommunityPost({ location, caption, imageUrl: image });
       const createdPost = mapRecordToPost(createdRecord, currentUserId);
 
@@ -150,6 +176,7 @@ export function Community() {
       setNewPost({ location: "", caption: "", image: "" });
       setShowCreatePost(false);
       setEditingPost(null);
+      setPublishCooldownUntil(Date.now() + POST_COOLDOWN_MS);
 
       if (!currentUserId) {
         setCurrentUserId(createdRecord.user_id);
@@ -157,6 +184,8 @@ export function Community() {
     } catch (error: any) {
       console.error("Error creating post:", error);
       window.alert(error?.message ?? "No se pudo crear la publicación.");
+    } finally {
+      setIsSubmittingPost(false);
     }
   };
 
@@ -173,6 +202,7 @@ export function Community() {
 
   const saveEditedPost = async () => {
     if (!editingPost) return;
+    if (isSubmittingPost) return;
 
     const location = newPost.location.trim();
     const caption = newPost.caption.trim();
@@ -180,6 +210,7 @@ export function Community() {
     if (!location || !caption || !image) return;
 
     try {
+      setIsSubmittingPost(true);
       const updated = await updateCommunityPost(editingPost.id, {
         location,
         caption,
@@ -196,6 +227,8 @@ export function Community() {
     } catch (error: any) {
       console.error("Error updating post:", error);
       window.alert(error?.message ?? "No se pudo actualizar la publicación.");
+    } finally {
+      setIsSubmittingPost(false);
     }
   };
 
@@ -211,6 +244,7 @@ export function Community() {
   };
 
   const closePostModal = () => {
+    if (isSubmittingPost) return;
     setShowCreatePost(false);
     setEditingPost(null);
     setNewPost({ location: "", caption: "", image: "" });
@@ -488,10 +522,20 @@ export function Community() {
 
               <button
                 onClick={editingPost ? saveEditedPost : createPost}
-                disabled={!newPost.location.trim() || !newPost.caption.trim() || !newPost.image.trim()}
+                disabled={
+                  isSubmittingPost ||
+                  isPublishCooldownActive ||
+                  !newPost.location.trim() ||
+                  !newPost.caption.trim() ||
+                  !newPost.image.trim()
+                }
                 className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {editingPost ? "Guardar cambios" : "Publicar"}
+                {isSubmittingPost
+                  ? (editingPost ? "Guardando..." : "Publicando...")
+                  : isPublishCooldownActive
+                    ? `Espera ${publishCooldownSeconds}s para volver a publicar`
+                    : (editingPost ? "Guardar cambios" : "Publicar")}
               </button>
             </div>
           </motion.div>
