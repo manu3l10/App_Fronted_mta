@@ -1,22 +1,30 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { ArrowLeft, Heart, MessageCircle, Bookmark, MoreHorizontal, MapPin, Plus, X, Image as ImageIcon, Send } from "lucide-react";
 import { useNavigate } from "react-router";
 import {
+  CommunityCommentRecord,
+  CommunityLikeRecord,
   CommunityPostRecord,
+  createCommunityComment,
   createCommunityPost,
   deleteCommunityPost,
   getCurrentUserId,
+  listCommunityCommentsByPostIds,
+  listCommunityLikesByPostIds,
   listCommunityPosts,
+  toggleCommunityLike,
   updateCommunityPost,
 } from "../../lib/communityApi";
 
 const POST_COOLDOWN_MS = 8000;
 
 interface Comment {
-  id: number;
+  id: string;
+  userId: string;
   username: string;
   text: string;
+  editable: boolean;
 }
 
 interface Post {
@@ -35,21 +43,60 @@ interface Post {
   editable: boolean;
 }
 
-const mapRecordToPost = (record: CommunityPostRecord, currentUserId: string | null): Post => ({
+const mapCommentRecordToComment = (
+  record: CommunityCommentRecord,
+  currentUserId: string | null
+): Comment => ({
   id: record.id,
   userId: record.user_id,
   username: record.author_name,
-  avatar: record.author_avatar,
-  location: record.location,
-  image: record.image_url,
-  likes: 0,
-  comments: 0,
-  caption: record.caption,
-  liked: false,
-  saved: false,
-  commentList: [],
+  text: record.content,
   editable: record.user_id === currentUserId,
 });
+
+const buildPostsFromRecords = (params: {
+  posts: CommunityPostRecord[];
+  comments: CommunityCommentRecord[];
+  likes: CommunityLikeRecord[];
+  currentUserId: string | null;
+}): Post[] => {
+  const commentsByPostId = new Map<string, Comment[]>();
+  const likesCountByPostId = new Map<string, number>();
+  const likedByMe = new Set<string>();
+
+  for (const comment of params.comments) {
+    const nextComment = mapCommentRecordToComment(comment, params.currentUserId);
+    const existing = commentsByPostId.get(comment.post_id) ?? [];
+    commentsByPostId.set(comment.post_id, [...existing, nextComment]);
+  }
+
+  for (const like of params.likes) {
+    likesCountByPostId.set(like.post_id, (likesCountByPostId.get(like.post_id) ?? 0) + 1);
+    if (params.currentUserId && like.user_id === params.currentUserId) {
+      likedByMe.add(like.post_id);
+    }
+  }
+
+  return params.posts.map((record) => {
+    const commentList = commentsByPostId.get(record.id) ?? [];
+
+    return {
+      id: record.id,
+      userId: record.user_id,
+      username: record.author_name,
+      avatar: record.author_avatar,
+      location: record.location,
+      image: record.image_url,
+      likes: likesCountByPostId.get(record.id) ?? 0,
+      comments: commentList.length,
+      caption: record.caption,
+      liked: likedByMe.has(record.id),
+      saved: false,
+      commentList,
+      editable: record.user_id === params.currentUserId,
+    };
+  });
+};
 
 export function Community() {
   const navigate = useNavigate();
@@ -65,6 +112,8 @@ export function Community() {
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
   const [publishCooldownUntil, setPublishCooldownUntil] = useState(0);
   const [cooldownTick, setCooldownTick] = useState(0);
+  const [likePendingByPost, setLikePendingByPost] = useState<Record<string, boolean>>({});
+  const [commentPendingByPost, setCommentPendingByPost] = useState<Record<string, boolean>>({});
   const [newPost, setNewPost] = useState({
     location: "",
     caption: "",
@@ -75,14 +124,37 @@ export function Community() {
   const isPublishCooldownActive = !editingPost && nowMs < publishCooldownUntil;
   const publishCooldownSeconds = Math.max(0, Math.ceil((publishCooldownUntil - nowMs) / 1000));
 
+  const canSubmitPost = useMemo(
+    () =>
+      !isSubmittingPost &&
+      !isPublishCooldownActive &&
+      Boolean(newPost.location.trim() && newPost.caption.trim() && newPost.image.trim()),
+    [isSubmittingPost, isPublishCooldownActive, newPost]
+  );
+
   const fetchPosts = async () => {
     setIsLoading(true);
     setLoadError(null);
 
     try {
-      const [userId, records] = await Promise.all([getCurrentUserId(), listCommunityPosts()]);
+      const userId = await getCurrentUserId();
+      const postRecords = await listCommunityPosts();
+      const postIds = postRecords.map((post) => post.id);
+
+      const [comments, likes] = await Promise.all([
+        listCommunityCommentsByPostIds(postIds),
+        listCommunityLikesByPostIds(postIds),
+      ]);
+
       setCurrentUserId(userId);
-      setPosts(records.map((record) => mapRecordToPost(record, userId)));
+      setPosts(
+        buildPostsFromRecords({
+          posts: postRecords,
+          comments,
+          likes,
+          currentUserId: userId,
+        })
+      );
     } catch (error: any) {
       console.error("Error loading community posts:", error);
       setLoadError(error?.message ?? "No se pudieron cargar las publicaciones.");
@@ -105,45 +177,84 @@ export function Community() {
     return () => window.clearInterval(interval);
   }, [isPublishCooldownActive]);
 
-  const toggleLike = (id: string) => {
+  const toggleLike = async (id: string) => {
+    if (likePendingByPost[id]) return;
+
+    const previousPost = posts.find((post) => post.id === id);
+    if (!previousPost) return;
+
+    const optimisticLiked = !previousPost.liked;
+    const optimisticLikes = optimisticLiked ? previousPost.likes + 1 : Math.max(0, previousPost.likes - 1);
+
+    setLikePendingByPost((prev) => ({ ...prev, [id]: true }));
     setPosts((prev) =>
       prev.map((post) =>
         post.id === id
-          ? { ...post, liked: !post.liked, likes: post.liked ? post.likes - 1 : post.likes + 1 }
+          ? { ...post, liked: optimisticLiked, likes: optimisticLikes }
           : post
       )
     );
+
+    try {
+      const result = await toggleCommunityLike(id);
+      setPosts((prev) =>
+        prev.map((post) => {
+          if (post.id !== id) return post;
+          if (post.liked === result.liked) return post;
+
+          return {
+            ...post,
+            liked: result.liked,
+            likes: result.liked ? post.likes + 1 : Math.max(0, post.likes - 1),
+          };
+        })
+      );
+    } catch (error: any) {
+      console.error("Error toggling like:", error);
+      setPosts((prev) =>
+        prev.map((post) => (post.id === id ? previousPost : post))
+      );
+      window.alert(error?.message ?? "No se pudo registrar el like.");
+    } finally {
+      setLikePendingByPost((prev) => ({ ...prev, [id]: false }));
+    }
   };
 
   const toggleSave = (id: string) => {
     setPosts((prev) => prev.map((post) => (post.id === id ? { ...post, saved: !post.saved } : post)));
   };
 
-  const addComment = (postId: string) => {
+  const addComment = async (postId: string) => {
     const text = commentInputs[postId]?.trim();
     if (!text) return;
+    if (commentPendingByPost[postId]) return;
 
-    setPosts((prev) =>
-      prev.map((post) =>
-        post.id === postId
-          ? {
-              ...post,
-              comments: post.comments + 1,
-              commentList: [
-                ...post.commentList,
-                {
-                  id: Date.now(),
-                  username: "tu_cuenta",
-                  text,
-                },
-              ],
-            }
-          : post
-      )
-    );
+    setCommentPendingByPost((prev) => ({ ...prev, [postId]: true }));
 
-    setCommentInputs((prev) => ({ ...prev, [postId]: "" }));
-    setOpenComments((prev) => ({ ...prev, [postId]: true }));
+    try {
+      const createdComment = await createCommunityComment({ postId, content: text });
+      const mappedComment = mapCommentRecordToComment(createdComment, currentUserId);
+
+      setPosts((prev) =>
+        prev.map((post) =>
+          post.id === postId
+            ? {
+                ...post,
+                comments: post.comments + 1,
+                commentList: [...post.commentList, mappedComment],
+              }
+            : post
+        )
+      );
+
+      setCommentInputs((prev) => ({ ...prev, [postId]: "" }));
+      setOpenComments((prev) => ({ ...prev, [postId]: true }));
+    } catch (error: any) {
+      console.error("Error creating comment:", error);
+      window.alert(error?.message ?? "No se pudo publicar el comentario.");
+    } finally {
+      setCommentPendingByPost((prev) => ({ ...prev, [postId]: false }));
+    }
   };
 
   const handleImageFile = (file?: File) => {
@@ -157,10 +268,7 @@ export function Community() {
 
   const createPost = async () => {
     if (isSubmittingPost) return;
-
-    if (Date.now() < publishCooldownUntil) {
-      return;
-    }
+    if (Date.now() < publishCooldownUntil) return;
 
     const location = newPost.location.trim();
     const caption = newPost.caption.trim();
@@ -170,7 +278,22 @@ export function Community() {
     try {
       setIsSubmittingPost(true);
       const createdRecord = await createCommunityPost({ location, caption, imageUrl: image });
-      const createdPost = mapRecordToPost(createdRecord, currentUserId);
+
+      const createdPost: Post = {
+        id: createdRecord.id,
+        userId: createdRecord.user_id,
+        username: createdRecord.author_name,
+        avatar: createdRecord.author_avatar,
+        location: createdRecord.location,
+        image: createdRecord.image_url,
+        likes: 0,
+        comments: 0,
+        caption: createdRecord.caption,
+        liked: false,
+        saved: false,
+        commentList: [],
+        editable: createdRecord.user_id === currentUserId,
+      };
 
       setPosts((prev) => [createdPost, ...prev]);
       setNewPost({ location: "", caption: "", image: "" });
@@ -218,7 +341,16 @@ export function Community() {
       });
 
       setPosts((prev) =>
-        prev.map((post) => (post.id === editingPost.id ? mapRecordToPost(updated, currentUserId) : post))
+        prev.map((post) =>
+          post.id === editingPost.id
+            ? {
+                ...post,
+                location: updated.location,
+                caption: updated.caption,
+                image: updated.image_url,
+              }
+            : post
+        )
       );
 
       setEditingPost(null);
@@ -362,9 +494,10 @@ export function Community() {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-4">
                   <motion.button
-                    whileTap={{ scale: 0.9 }}
+                    whileTap={{ scale: likePendingByPost[post.id] ? 1 : 0.9 }}
                     onClick={() => toggleLike(post.id)}
-                    className="transition-colors"
+                    className="transition-colors disabled:opacity-50"
+                    disabled={Boolean(likePendingByPost[post.id])}
                   >
                     <Heart
                       className={`w-6 h-6 ${
@@ -431,8 +564,9 @@ export function Community() {
                 />
                 <button
                   onClick={() => addComment(post.id)}
-                  className="p-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+                  className="p-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50"
                   aria-label="Publicar comentario"
+                  disabled={Boolean(commentPendingByPost[post.id])}
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -465,8 +599,9 @@ export function Community() {
               </div>
               <button
                 onClick={closePostModal}
-                className="p-2 rounded-lg hover:bg-slate-100 text-slate-600"
+                className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 disabled:opacity-50"
                 aria-label="Cerrar"
+                disabled={isSubmittingPost}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -522,13 +657,7 @@ export function Community() {
 
               <button
                 onClick={editingPost ? saveEditedPost : createPost}
-                disabled={
-                  isSubmittingPost ||
-                  isPublishCooldownActive ||
-                  !newPost.location.trim() ||
-                  !newPost.caption.trim() ||
-                  !newPost.image.trim()
-                }
+                disabled={!canSubmitPost}
                 className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmittingPost
