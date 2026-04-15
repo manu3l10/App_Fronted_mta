@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { motion } from "motion/react";
-import { ArrowLeft, Heart, MessageCircle, Bookmark, MoreHorizontal, MapPin, Plus } from "lucide-react";
+import { ArrowLeft, Heart, MessageCircle, Bookmark, MoreHorizontal, MapPin, Plus, X, Image as ImageIcon, Send } from "lucide-react";
 import { useNavigate } from "react-router";
+
+interface Comment {
+  id: number;
+  username: string;
+  text: string;
+}
 
 interface Post {
   id: number;
@@ -14,6 +20,8 @@ interface Post {
   caption: string;
   liked: boolean;
   saved: boolean;
+  commentList: Comment[];
+  editable?: boolean;
 }
 
 export function Community() {
@@ -30,6 +38,10 @@ export function Community() {
       caption: "¡El atardecer en París nunca decepciona! 🗼✨ #ParisVibes #TravelGoals",
       liked: false,
       saved: false,
+      commentList: [
+        { id: 101, username: "viajero_col", text: "Ese cielo está brutal. París siempre gana." },
+        { id: 102, username: "ana_routes", text: "¿Desde dónde tomaste la foto?" },
+      ],
     },
     {
       id: 2,
@@ -42,6 +54,9 @@ export function Community() {
       caption: "Las calles de Tokio de noche son pura magia 🇯🇵✨",
       liked: true,
       saved: false,
+      commentList: [
+        { id: 201, username: "camilo_trip", text: "Tokio de noche parece otro planeta." },
+      ],
     },
     {
       id: 3,
@@ -54,6 +69,9 @@ export function Community() {
       caption: "Café colombiano con estas vistas... ¡no hay nada mejor! ☕🏔️",
       liked: false,
       saved: true,
+      commentList: [
+        { id: 301, username: "mta_user", text: "Necesito ese plan en mi próximo viaje." },
+      ],
     },
     {
       id: 4,
@@ -66,6 +84,7 @@ export function Community() {
       caption: "Luna de miel perfecta 🌴💙 #MaldivasParadise",
       liked: false,
       saved: false,
+      commentList: [],
     },
     {
       id: 5,
@@ -78,8 +97,21 @@ export function Community() {
       caption: "La arquitectura de Gaudí es simplemente impresionante 🏛️✨",
       liked: true,
       saved: false,
+      commentList: [
+        { id: 501, username: "laura_mapas", text: "La Sagrada Familia es de otro nivel." },
+      ],
     },
   ]);
+  const [commentInputs, setCommentInputs] = useState<Record<number, string>>({});
+  const [openComments, setOpenComments] = useState<Record<number, boolean>>({});
+  const [showCreatePost, setShowCreatePost] = useState(false);
+  const [activePostMenu, setActivePostMenu] = useState<number | null>(null);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [newPost, setNewPost] = useState({
+    location: "",
+    caption: "",
+    image: "",
+  });
 
   const toggleLike = (id: number) => {
     setPosts(
@@ -95,6 +127,108 @@ export function Community() {
     setPosts(posts.map((post) => (post.id === id ? { ...post, saved: !post.saved } : post)));
   };
 
+  const addComment = (postId: number) => {
+    const text = commentInputs[postId]?.trim();
+    if (!text) return;
+
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === postId
+          ? {
+              ...post,
+              comments: post.comments + 1,
+              commentList: [
+                ...post.commentList,
+                {
+                  id: Date.now(),
+                  username: "tu_cuenta",
+                  text,
+                },
+              ],
+            }
+          : post
+      )
+    );
+    setCommentInputs((prev) => ({ ...prev, [postId]: "" }));
+    setOpenComments((prev) => ({ ...prev, [postId]: true }));
+  };
+
+  const handleImageFile = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setNewPost((prev) => ({ ...prev, image: String(reader.result) }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const createPost = () => {
+    const location = newPost.location.trim();
+    const caption = newPost.caption.trim();
+    const image = newPost.image.trim();
+    if (!location || !caption || !image) return;
+
+    const post: Post = {
+      id: Date.now(),
+      username: "tu_cuenta",
+      avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Traveler",
+      location,
+      image,
+      likes: 0,
+      comments: 0,
+      caption,
+      liked: false,
+      saved: false,
+      commentList: [],
+      editable: true,
+    };
+
+    setPosts((prev) => [post, ...prev]);
+    setNewPost({ location: "", caption: "", image: "" });
+    setShowCreatePost(false);
+  };
+
+  const startEditPost = (post: Post) => {
+    setEditingPost(post);
+    setNewPost({
+      location: post.location,
+      caption: post.caption,
+      image: post.image,
+    });
+    setShowCreatePost(true);
+    setActivePostMenu(null);
+  };
+
+  const saveEditedPost = () => {
+    if (!editingPost) return;
+    const location = newPost.location.trim();
+    const caption = newPost.caption.trim();
+    const image = newPost.image.trim();
+    if (!location || !caption || !image) return;
+
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === editingPost.id
+          ? { ...post, location, caption, image }
+          : post
+      )
+    );
+    setEditingPost(null);
+    setNewPost({ location: "", caption: "", image: "" });
+    setShowCreatePost(false);
+  };
+
+  const deletePost = (id: number) => {
+    setPosts((prev) => prev.filter((post) => post.id !== id));
+    setActivePostMenu(null);
+  };
+
+  const closePostModal = () => {
+    setShowCreatePost(false);
+    setEditingPost(null);
+    setNewPost({ location: "", caption: "", image: "" });
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
       {/* Header */}
@@ -107,7 +241,10 @@ export function Community() {
             <ArrowLeft className="w-6 h-6 text-gray-700" />
           </button>
           <h1 className="font-semibold text-gray-900">Comunidad</h1>
-          <button className="p-2 hover:bg-purple-100/50 rounded-lg transition-colors">
+          <button
+            onClick={() => setShowCreatePost(true)}
+            className="p-2 hover:bg-purple-100/50 rounded-lg transition-colors"
+          >
             <Plus className="w-6 h-6 text-gray-700" />
           </button>
         </div>
@@ -139,9 +276,44 @@ export function Community() {
                   </div>
                 </div>
               </div>
-              <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                <MoreHorizontal className="w-5 h-5 text-gray-600" />
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setActivePostMenu((current) => current === post.id ? null : post.id)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <MoreHorizontal className="w-5 h-5 text-gray-600" />
+                </button>
+
+                {activePostMenu === post.id && (
+                  <>
+                    <button
+                      className="fixed inset-0 z-10 cursor-default"
+                      aria-label="Cerrar menú"
+                      onClick={() => setActivePostMenu(null)}
+                    />
+                    <div className="absolute right-0 top-10 z-20 w-40 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden">
+                      {post.editable ? (
+                        <>
+                          <button
+                            onClick={() => startEditPost(post)}
+                            className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-purple-50 transition-colors"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => deletePost(post.id)}
+                            className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            Eliminar
+                          </button>
+                        </>
+                      ) : (
+                        <p className="px-4 py-3 text-sm text-gray-500">Publicación de la comunidad</p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Post Image */}
@@ -164,7 +336,10 @@ export function Community() {
                       }`}
                     />
                   </motion.button>
-                  <button className="hover:text-purple-600 transition-colors">
+                  <button
+                    onClick={() => setOpenComments((prev) => ({ ...prev, [post.id]: !prev[post.id] }))}
+                    className="hover:text-purple-600 transition-colors"
+                  >
                     <MessageCircle className="w-6 h-6 text-gray-700" />
                   </button>
                 </div>
@@ -188,10 +363,46 @@ export function Community() {
                 <span className="font-semibold">{post.username}</span> {post.caption}
               </p>
               {post.comments > 0 && (
-                <button className="text-sm text-gray-500 mt-2">
+                <button
+                  onClick={() => setOpenComments((prev) => ({ ...prev, [post.id]: !prev[post.id] }))}
+                  className="text-sm text-gray-500 mt-2"
+                >
                   Ver los {post.comments} comentarios
                 </button>
               )}
+
+              {openComments[post.id] && (
+                <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
+                  {post.commentList.length > 0 ? (
+                    post.commentList.map((comment) => (
+                      <p key={comment.id} className="text-sm text-gray-800">
+                        <span className="font-semibold">{comment.username}</span> {comment.text}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500">Sé la primera persona en comentar.</p>
+                  )}
+                </div>
+              )}
+
+              <div className="mt-3 flex items-center gap-2 border-t border-gray-100 pt-3">
+                <input
+                  value={commentInputs[post.id] ?? ""}
+                  onChange={(event) => setCommentInputs((prev) => ({ ...prev, [post.id]: event.target.value }))}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") addComment(post.id);
+                  }}
+                  placeholder="Añade un comentario..."
+                  className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-200"
+                />
+                <button
+                  onClick={() => addComment(post.id)}
+                  className="p-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+                  aria-label="Publicar comentario"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </motion.div>
         ))}
@@ -201,10 +412,92 @@ export function Community() {
       <motion.button
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
+        onClick={() => setShowCreatePost(true)}
         className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full shadow-xl flex items-center justify-center z-40"
       >
         <Plus className="w-6 h-6" />
       </motion.button>
+
+      {showCreatePost && (
+        <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, y: 18, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-purple-100 overflow-hidden"
+          >
+            <div className="p-4 border-b border-purple-100 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">Nueva publicación</p>
+                <h2 className="font-semibold text-slate-900">Comparte tu viaje</h2>
+              </div>
+              <button
+                onClick={closePostModal}
+                className="p-2 rounded-lg hover:bg-slate-100 text-slate-600"
+                aria-label="Cerrar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Ubicación</span>
+                <input
+                  value={newPost.location}
+                  onChange={(event) => setNewPost((prev) => ({ ...prev, location: event.target.value }))}
+                  placeholder="Ej: Salento, Colombia"
+                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-200"
+                />
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Descripción</span>
+                <textarea
+                  value={newPost.caption}
+                  onChange={(event) => setNewPost((prev) => ({ ...prev, caption: event.target.value }))}
+                  placeholder="Cuenta algo de tu experiencia..."
+                  rows={3}
+                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none resize-none focus:ring-2 focus:ring-purple-200"
+                />
+              </label>
+
+              <div className="space-y-2">
+                <span className="text-sm font-medium text-slate-700">Imagen</span>
+                <input
+                  value={newPost.image.startsWith("data:") ? "" : newPost.image}
+                  onChange={(event) => setNewPost((prev) => ({ ...prev, image: event.target.value }))}
+                  placeholder="Pega una URL de imagen"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-200"
+                />
+                <label className="flex items-center justify-center gap-2 border border-dashed border-purple-200 rounded-lg px-3 py-3 text-sm text-purple-700 cursor-pointer hover:bg-purple-50 transition-colors">
+                  <ImageIcon className="w-4 h-4" />
+                  Subir imagen desde el equipo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => handleImageFile(event.target.files?.[0])}
+                  />
+                </label>
+              </div>
+
+              {newPost.image && (
+                <div className="aspect-video bg-slate-100 rounded-xl overflow-hidden border border-slate-200">
+                  <img src={newPost.image} alt="Vista previa" className="w-full h-full object-cover" />
+                </div>
+              )}
+
+              <button
+                onClick={editingPost ? saveEditedPost : createPost}
+                disabled={!newPost.location.trim() || !newPost.caption.trim() || !newPost.image.trim()}
+                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {editingPost ? "Guardar cambios" : "Publicar"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, Mic, Plane } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { ReactNode } from "react";
 import { ChatMessage } from "./ChatMessage";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -36,8 +36,23 @@ type HotelOption = {
   highlights: string[];
 };
 
+type FlightOption = {
+  label: string;
+  flights: ItineraryDetails["flights"];
+  budget: string;
+};
+
+type ChatChangeRequest = {
+  type: "flights" | "hotel";
+  tripId: string | number;
+  destination: string;
+  startDate: string;
+  endDate: string;
+};
+
 export function AIChat() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t, lang } = useLanguage();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessageItem[]>([
@@ -104,6 +119,184 @@ export function AIChat() {
       highlights: ["Vista al paisaje cafetero", "Tour de cafe incluido", "Check-in flexible"],
     },
   ];
+
+  const ejeCafeteroFlightAlternatives: FlightOption[] = [
+    {
+      label: "Opción flexible",
+      budget: "$398.000 COP",
+      flights: [
+        {
+          date: "2026-05-10",
+          route: "Bogotá (BOG) → Pereira (PEI)",
+          airline: "JetSMART",
+          time: "09:10 - 10:08",
+          price: "$189.000 COP",
+        },
+        {
+          date: "2026-05-14",
+          route: "Pereira (PEI) → Bogotá (BOG)",
+          airline: "JetSMART",
+          time: "20:05 - 21:02",
+          price: "$209.000 COP",
+        },
+      ],
+    },
+    {
+      label: "Opción cómoda",
+      budget: "$515.000 COP",
+      flights: [
+        {
+          date: "2026-05-10",
+          route: "Bogotá (BOG) → Armenia (AXM)",
+          airline: "Avianca",
+          time: "06:35 - 07:34",
+          price: "$255.000 COP",
+        },
+        {
+          date: "2026-05-14",
+          route: "Armenia (AXM) → Bogotá (BOG)",
+          airline: "LATAM",
+          time: "17:25 - 18:24",
+          price: "$260.000 COP",
+        },
+      ],
+    },
+  ];
+
+  const saveFlightAlternativeForTrip = (request: ChatChangeRequest, option: FlightOption) => {
+    const previousDetails = getItineraryDetails(request.tripId) ?? { flights: [], hotel: null };
+    saveItineraryDetails(request.tripId, {
+      ...previousDetails,
+      flights: option.flights,
+    });
+    setLastTripId(request.tripId);
+    setMessages((prev) => [
+      ...prev,
+      {
+        type: "ai",
+        content: `Listo. Reemplacé los vuelos por la ${option.label.toLowerCase()} en tu itinerario.`,
+        card: (
+          <button
+            onClick={() => navigate("/itineraries")}
+            className="w-full md:w-auto bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+          >
+            Ver itinerario actualizado
+          </button>
+        ),
+      },
+    ]);
+  };
+
+  const saveHotelOptionForTrip = (request: ChatChangeRequest, option: HotelOption) => {
+    const previousDetails = getItineraryDetails(request.tripId) ?? { flights: [], hotel: null };
+    const hotel: HotelStay = {
+      name: option.name,
+      location: option.location,
+      checkIn: request.startDate,
+      checkOut: request.endDate,
+      pricePerNight: option.pricePerNight,
+      image: option.image,
+    };
+    saveItineraryDetails(request.tripId, {
+      ...previousDetails,
+      hotel,
+    });
+    setLastTripId(request.tripId);
+    setMessages((prev) => [
+      ...prev,
+      {
+        type: "ai",
+        content: `Listo. Cambié el hotel a "${option.name}" en tu itinerario.`,
+        card: (
+          <button
+            onClick={() => navigate("/itineraries")}
+            className="w-full md:w-auto bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+          >
+            Ver itinerario actualizado
+          </button>
+        ),
+      },
+    ]);
+  };
+
+  const buildFlightChangeCard = (request: ChatChangeRequest) => (
+    <div className="space-y-4">
+      {ejeCafeteroFlightAlternatives.map((option) => (
+        <div key={option.label} className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 text-white space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="font-semibold text-sm uppercase tracking-wide text-cyan-300">{option.label}</h4>
+            <span className="text-xs text-gray-300">{option.budget}</span>
+          </div>
+          {option.flights.map((flight) => (
+            <div key={`${option.label}-${flight.date}-${flight.route}`} className="rounded-xl bg-white/10 p-3 flex items-start gap-3">
+              <Plane className="w-4 h-4 mt-0.5 text-cyan-300" />
+              <div>
+                <p className="text-sm font-medium">{flight.route}</p>
+                <p className="text-xs text-gray-300">
+                  {flight.date} • {flight.airline} • {flight.time} • {flight.price}
+                </p>
+              </div>
+            </div>
+          ))}
+          <button
+            onClick={() => saveFlightAlternativeForTrip(request, option)}
+            className="w-full bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+          >
+            Usar estos vuelos
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+
+  const buildHotelChangeCard = (request: ChatChangeRequest) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {ejeCafeteroHotelOptions.map((option) => (
+        <div key={option.name} className="space-y-3">
+          <HotelCard
+            name={option.name}
+            location={option.location}
+            rating={option.rating}
+            price={option.pricePerNight}
+            image={option.image}
+            amenities={option.amenities}
+          />
+          <div className="bg-white/10 rounded-xl border border-white/20 p-3 text-xs text-gray-200 space-y-1">
+            {option.highlights.map((item) => (
+              <p key={item}>• {item}</p>
+            ))}
+          </div>
+          <button
+            onClick={() => saveHotelOptionForTrip(request, option)}
+            className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+          >
+            Usar este hotel
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+
+  useEffect(() => {
+    const request = (location.state as any)?.chatRequest as ChatChangeRequest | undefined;
+    if (!request?.tripId) return;
+
+    setLastTripId(request.tripId);
+    const nextMessage: ChatMessageItem = request.type === "flights"
+      ? {
+          type: "ai",
+          content: `Traje más opciones de vuelos para ${request.destination}. Elige una para reemplazar los vuelos actuales.`,
+          card: buildFlightChangeCard(request),
+        }
+      : {
+          type: "ai",
+          content: `Traje más opciones de hotel para ${request.destination}. Elige una para reemplazar el hotel actual.`,
+          card: buildHotelChangeCard(request),
+        };
+
+    setMessages((prev) => [...prev, nextMessage]);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location, navigate]);
 
   const saveProposalToItineraries = async (payload: ChatCardPayload) => {
     if (savingProposal) return;

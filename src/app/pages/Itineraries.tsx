@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { ArrowLeft, MapPin, Calendar, DollarSign, Star, Trash2, Plane, Building2, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, DollarSign, Star, Trash2, Plane, Building2, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useNavigate } from "react-router";
 import { supabase } from "../../lib/supabase";
-import { ItineraryDetails, deleteItineraryDetails, getItineraryDetails } from "../../lib/itineraryDetails";
+import { ItineraryDetails, deleteItineraryDetails, getItineraryDetails, saveItineraryDetails, setLastTripId } from "../../lib/itineraryDetails";
 import { buildSignalsByDate } from "../../lib/calendarSignals";
 
 interface SavedItinerary {
@@ -24,6 +24,7 @@ export function Itineraries() {
   const [itineraries, setItineraries] = useState<SavedItinerary[]>([]);
   const [loading, setLoading] = useState(true);
   const [calendarDate, setCalendarDate] = useState(new Date());
+  const [editingItinerary, setEditingItinerary] = useState<SavedItinerary | null>(null);
 
   const year = calendarDate.getFullYear();
   const month = calendarDate.getMonth();
@@ -95,6 +96,43 @@ export function Itineraries() {
       deleteItineraryDetails(id);
       setItineraries(itineraries.filter((item) => item.id !== id));
     }
+  };
+
+  const persistItineraryDetails = (id: string | number, nextDetails: ItineraryDetails) => {
+    saveItineraryDetails(id, nextDetails);
+    setItineraries((prev) =>
+      prev.map((item) => item.id === id ? { ...item, details: nextDetails } : item)
+    );
+    setEditingItinerary((prev) => prev && prev.id === id ? { ...prev, details: nextDetails } : prev);
+  };
+
+  const removeFlight = (itinerary: SavedItinerary, flightIndex: number) => {
+    const details = itinerary.details ?? { flights: [], hotel: null };
+    const nextDetails = {
+      ...details,
+      flights: details.flights.filter((_, index) => index !== flightIndex),
+    };
+    persistItineraryDetails(itinerary.id, nextDetails);
+  };
+
+  const removeHotel = (itinerary: SavedItinerary) => {
+    const details = itinerary.details ?? { flights: [], hotel: null };
+    persistItineraryDetails(itinerary.id, { ...details, hotel: null });
+  };
+
+  const askChatForChanges = (itinerary: SavedItinerary, type: "flights" | "hotel") => {
+    setLastTripId(itinerary.id);
+    navigate("/", {
+      state: {
+        chatRequest: {
+          type,
+          tripId: itinerary.id,
+          destination: itinerary.destination,
+          startDate: itinerary.startDate,
+          endDate: itinerary.endDate,
+        },
+      },
+    });
   };
 
   return (
@@ -312,7 +350,10 @@ export function Itineraries() {
                   <button className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow">
                     Ver itinerario
                   </button>
-                  <button className="px-4 py-2.5 border border-purple-200 text-purple-600 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors">
+                  <button
+                    onClick={() => setEditingItinerary(itinerary)}
+                    className="px-4 py-2.5 border border-purple-200 text-purple-600 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors"
+                  >
                     Editar
                   </button>
                 </div>
@@ -340,6 +381,105 @@ export function Itineraries() {
           </motion.div>
         )}
       </div>
+
+      {editingItinerary && (
+        <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, y: 18, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-purple-100"
+          >
+            <div className="sticky top-0 bg-white/95 backdrop-blur-xl border-b border-purple-100 p-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">Editar itinerario</p>
+                <h2 className="text-lg font-semibold text-slate-900">{editingItinerary.destination}</h2>
+                <p className="text-sm text-slate-500">{editingItinerary.dates}</p>
+              </div>
+              <button
+                onClick={() => setEditingItinerary(null)}
+                className="p-2 rounded-lg hover:bg-slate-100 text-slate-600"
+                aria-label="Cerrar editor"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              <section className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Plane className="w-4 h-4 text-blue-600" />
+                    <h3 className="font-semibold text-blue-950">Vuelos seleccionados</h3>
+                  </div>
+                  <button
+                    onClick={() => askChatForChanges(editingItinerary, "flights")}
+                    className="px-3 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Cambiar vuelos
+                  </button>
+                </div>
+
+                {editingItinerary.details?.flights?.length ? (
+                  <div className="space-y-2">
+                    {editingItinerary.details.flights.map((flight, index) => (
+                      <div key={`${flight.date}-${flight.route}-${index}`} className="rounded-lg bg-white border border-blue-100 p-3 flex items-start justify-between gap-3">
+                        <div className="text-sm text-slate-700">
+                          <p className="font-medium text-slate-900">{flight.route}</p>
+                          <p className="text-xs mt-1">{flight.date} • {flight.airline} • {flight.time}</p>
+                          <p className="text-xs text-blue-700 mt-1">{flight.price}</p>
+                        </div>
+                        <button
+                          onClick={() => removeFlight(editingItinerary, index)}
+                          className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-xs font-medium hover:bg-red-50 transition-colors"
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-600">No hay vuelos confirmados para este itinerario.</p>
+                )}
+              </section>
+
+              <section className="rounded-xl border border-purple-100 bg-purple-50/70 p-4">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-purple-600" />
+                    <h3 className="font-semibold text-purple-950">Hotel seleccionado</h3>
+                  </div>
+                  <button
+                    onClick={() => askChatForChanges(editingItinerary, "hotel")}
+                    className="px-3 py-2 rounded-lg bg-purple-600 text-white text-xs font-medium hover:bg-purple-700 transition-colors"
+                  >
+                    Cambiar hotel
+                  </button>
+                </div>
+
+                {editingItinerary.details?.hotel ? (
+                  <div className="rounded-lg bg-white border border-purple-100 p-3 flex items-start justify-between gap-3">
+                    <div className="text-sm text-slate-700">
+                      <p className="font-medium text-slate-900">{editingItinerary.details.hotel.name}</p>
+                      <p className="text-xs mt-1">
+                        {editingItinerary.details.hotel.location} • {editingItinerary.details.hotel.checkIn} al {editingItinerary.details.hotel.checkOut}
+                      </p>
+                      <p className="text-xs text-purple-700 mt-1">{editingItinerary.details.hotel.pricePerNight} por noche</p>
+                    </div>
+                    <button
+                      onClick={() => removeHotel(editingItinerary)}
+                      className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 text-xs font-medium hover:bg-red-50 transition-colors"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-600">Aún no hay hotel confirmado para este itinerario.</p>
+                )}
+              </section>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
