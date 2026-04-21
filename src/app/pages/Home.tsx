@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Menu, Settings, Bell } from "lucide-react";
+import { Menu, Settings, Bell, User } from "lucide-react";
 import { useNavigate, useLocation } from "react-router";
 import { WelcomeScreen } from "../components/WelcomeScreen";
 import { AIChat } from "../components/AIChat";
@@ -93,6 +93,20 @@ export function Home() {
       setNotificationsError(error?.message ?? "No se pudieron cargar las notificaciones.");
     }
   };
+
+  const getUserAvatarUrl = () =>
+    user?.user_metadata?.avatar_url || user?.user_metadata?.picture || "";
+
+  const getUserInitial = () =>
+    user?.user_metadata?.full_name?.[0]?.toUpperCase() ||
+    user?.email?.[0]?.toUpperCase() ||
+    "V";
+
+  const getUserName = () =>
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.username ||
+    user?.email?.split('@')[0] ||
+    "Viajero";
 
   const unreadNotifications = notifications.filter((notification) => !notification.read_at);
 
@@ -273,7 +287,15 @@ export function Home() {
                 }}
                 className={`w-8 h-8 md:w-9 md:h-9 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center cursor-pointer border border-white/10 shadow-lg hover:scale-105 active:scale-95 transition-all ${showUserMenu ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-slate-950' : ''}`}
               >
-                <span className="text-white text-xs font-bold font-mono">V</span>
+                {getUserAvatarUrl() ? (
+                  <img
+                    src={getUserAvatarUrl()}
+                    alt={getUserName()}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  <span className="text-white text-xs font-bold font-mono">{getUserInitial()}</span>
+                )}
               </div>
 
               <AnimatePresence>
@@ -288,18 +310,38 @@ export function Home() {
                     >
                       <div className="p-4 border-b border-white/5 flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-                          <span className="text-white text-[10px] font-bold">
-                            {user?.email?.[0].toUpperCase() || "V"}
-                          </span>
+                          {getUserAvatarUrl() ? (
+                            <img
+                              src={getUserAvatarUrl()}
+                              alt={getUserName()}
+                              className="w-full h-full rounded-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-white text-[10px] font-bold">
+                              {getUserInitial()}
+                            </span>
+                          )}
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-white truncate">
-                            {user?.email?.split('@')[0] || "Viajero"}
+                            {getUserName()}
                           </p>
                           <p className="text-[10px] text-gray-500 truncate">{user?.email || "@traveler"}</p>
                         </div>
                       </div>
                       <div className="p-1">
+                        <button
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            navigate("/profile");
+                          }}
+                          className="w-full flex items-center gap-2 p-3 text-gray-200 hover:bg-white/5 rounded-xl transition-colors text-sm font-medium"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center">
+                            <User className="w-4 h-4" />
+                          </div>
+                          Mi perfil
+                        </button>
                         <button
                           onClick={() => {
                             supabase.auth.signOut();

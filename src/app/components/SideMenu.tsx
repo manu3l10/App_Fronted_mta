@@ -24,11 +24,32 @@ export function SideMenu({ isOpen, onClose }: SideMenuProps) {
     };
     checkUser();
 
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+      setUser(session?.user ?? null);
+    });
+
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('resize', checkMobile);
+    };
   }, []);
+
+  const getUserAvatarUrl = () =>
+    user?.user_metadata?.avatar_url || user?.user_metadata?.picture || "";
+
+  const getUserInitial = () =>
+    user?.user_metadata?.full_name?.[0]?.toUpperCase() ||
+    user?.email?.[0]?.toUpperCase() ||
+    "V";
+
+  const getUserName = () =>
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.username ||
+    user?.email?.split('@')[0] ||
+    t('menu.user');
 
   const menuItems = [
     { icon: User, label: t('menu.profile'), path: "/profile", color: "from-blue-500 to-blue-600" },
@@ -84,11 +105,19 @@ export function SideMenu({ isOpen, onClose }: SideMenuProps) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-slate-800 flex items-center justify-center border border-white/10 shadow-lg shadow-blue-500/10">
-                        <User className="w-5 h-5 md:w-6 md:h-6 text-white" />
+                        {getUserAvatarUrl() ? (
+                          <img
+                            src={getUserAvatarUrl()}
+                            alt={getUserName()}
+                            className="w-full h-full rounded-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-white text-sm md:text-base font-bold">{getUserInitial()}</span>
+                        )}
                       </div>
                       <div>
                         <h3 className="font-bold text-white text-sm md:text-base">
-                          {user?.email?.split('@')[0] || t('menu.user')}
+                          {getUserName()}
                         </h3>
                         <p className="text-[10px] md:text-xs text-gray-500">{user?.email || "@traveler"}</p>
                       </div>
