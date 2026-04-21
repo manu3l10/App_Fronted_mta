@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { ArrowLeft, Heart, MapPin, Star, Plane, Hotel, Utensils, Bookmark } from "lucide-react";
+import { ArrowLeft, Heart, MapPin, Star, Hotel, Utensils, Bookmark } from "lucide-react";
 import { useNavigate } from "react-router";
 import { CommunityPostRecord, listSavedCommunityPosts, toggleCommunitySave } from "../../lib/communityApi";
+import { PlaceFavoriteRecord, listPlaceFavorites, removePlaceFavoriteByKey } from "../../lib/placeFavorites";
 
-type FavoriteType = "destination" | "hotel" | "restaurant" | "post";
+type FavoriteType = "hotel" | "restaurant" | "post";
+type FavoriteFilter = "favorites" | FavoriteType;
 
 interface Favorite {
   id: string;
@@ -18,20 +20,15 @@ interface Favorite {
 
 export function Favorites() {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState<FavoriteType | "all">("all");
+  const [filter, setFilter] = useState<FavoriteFilter>("favorites");
   const [isLoadingSavedPosts, setIsLoadingSavedPosts] = useState(true);
+  const [isLoadingPlaces, setIsLoadingPlaces] = useState(true);
   const [savedPostsError, setSavedPostsError] = useState<string | null>(null);
-  const [favorites, setFavorites] = useState<Favorite[]>([
-    {
-      id: "placeholder-destination",
-      name: "Explora Destinos",
-      location: "Recomendado para ti",
-      type: "destination",
-      image: "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&q=80&w=1000",
-      rating: 5.0,
-      description: "Próximamente verás aquí tus lugares favoritos recomendados por la IA.",
-    },
-  ]);
+  const [placesError, setPlacesError] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+
+  const hotelFallbackImage = "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&q=80&w=1000";
+  const restaurantFallbackImage = "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=1000";
 
   const mapPostToFavorite = (post: CommunityPostRecord): Favorite => ({
     id: post.id,
@@ -42,6 +39,38 @@ export function Favorites() {
     rating: 5.0,
     description: post.caption,
   });
+
+  const mapPlaceToFavorite = (place: PlaceFavoriteRecord): Favorite => ({
+    id: place.place_key,
+    name: place.name,
+    location: place.location,
+    type: place.item_type,
+    image:
+      place.image_url ||
+      (place.item_type === "hotel" ? hotelFallbackImage : restaurantFallbackImage),
+    rating: Number(place.rating ?? 4.8),
+    description: place.description || "Favorito guardado para revisar despues.",
+  });
+
+  const fetchPlaceFavorites = async () => {
+    setIsLoadingPlaces(true);
+    setPlacesError(null);
+
+    try {
+      const places = await listPlaceFavorites(["hotel", "restaurant"]);
+      const mappedPlaces = places.map(mapPlaceToFavorite);
+
+      setFavorites((prev) => [
+        ...prev.filter((favorite) => favorite.type === "post"),
+        ...mappedPlaces,
+      ]);
+    } catch (error: any) {
+      console.error("Error loading place favorites:", error);
+      setPlacesError(error?.message ?? "No se pudieron cargar tus favoritos.");
+    } finally {
+      setIsLoadingPlaces(false);
+    }
+  };
 
   const fetchSavedPosts = async () => {
     setIsLoadingSavedPosts(true);
@@ -64,10 +93,14 @@ export function Favorites() {
   };
 
   useEffect(() => {
+    fetchPlaceFavorites();
     fetchSavedPosts();
   }, []);
 
-  const filteredFavorites = filter === "all" ? favorites : favorites.filter((f) => f.type === filter);
+  const filteredFavorites =
+    filter === "favorites"
+      ? favorites.filter((f) => f.type === "hotel" || f.type === "restaurant")
+      : favorites.filter((f) => f.type === filter);
 
   const removeFavorite = async (favorite: Favorite) => {
     if (favorite.type === "post") {
@@ -78,6 +111,14 @@ export function Favorites() {
         window.alert(error?.message ?? "No se pudo quitar la publicación guardada.");
         return;
       }
+    } else {
+      try {
+        await removePlaceFavoriteByKey(favorite.id);
+      } catch (error: any) {
+        console.error("Error removing place favorite:", error);
+        window.alert(error?.message ?? "No se pudo quitar el favorito.");
+        return;
+      }
     }
 
     const id = favorite.id;
@@ -86,8 +127,6 @@ export function Favorites() {
 
   const getTypeIcon = (type: FavoriteType) => {
     switch (type) {
-      case "destination":
-        return Plane;
       case "hotel":
         return Hotel;
       case "restaurant":
@@ -118,24 +157,13 @@ export function Favorites() {
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
           <motion.button
             whileTap={{ scale: 0.95 }}
-            onClick={() => setFilter("all")}
-            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${filter === "all"
+            onClick={() => setFilter("favorites")}
+            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${filter === "favorites"
               ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
               : "bg-white/80 text-gray-700 hover:bg-white"
               }`}
           >
-            Todos ({favorites.length})
-          </motion.button>
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setFilter("destination")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${filter === "destination"
-              ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg"
-              : "bg-white/80 text-gray-700 hover:bg-white"
-              }`}
-          >
-            <Plane className="w-4 h-4" />
-            Destinos ({favorites.filter((f) => f.type === "destination").length})
+            Favoritos ({favorites.filter((f) => f.type === "hotel" || f.type === "restaurant").length})
           </motion.button>
           <motion.button
             whileTap={{ scale: 0.95 }}
@@ -172,9 +200,24 @@ export function Favorites() {
           </motion.button>
         </div>
 
+        {isLoadingPlaces && (
+          <div className="mb-4 rounded-xl bg-white/80 p-4 text-sm text-gray-600">
+            Cargando favoritos...
+          </div>
+        )}
+
         {isLoadingSavedPosts && (
           <div className="mb-4 rounded-xl bg-white/80 p-4 text-sm text-gray-600">
             Cargando publicaciones guardadas...
+          </div>
+        )}
+
+        {placesError && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {placesError}
+            <button onClick={fetchPlaceFavorites} className="ml-2 underline font-medium">
+              Reintentar
+            </button>
           </div>
         )}
 

@@ -7,8 +7,6 @@ import { ChatMessage } from "./ChatMessage";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { ItineraryCard } from "./ItineraryCard";
 import { HotelCard } from "./HotelCard";
-import { RestaurantCard } from "./RestaurantCard";
-import { MapPreview } from "./MapPreview";
 import { supabase } from "../../lib/supabase";
 import { HotelStay, ItineraryDetails, getItineraryDetails, getLastTripId, saveItineraryDetails, setLastTripId } from "../../lib/itineraryDetails";
 
@@ -67,37 +65,36 @@ export function AIChat() {
   const [savingHotel, setSavingHotel] = useState(false);
 
   const suggestions = [
-    t('chat.suggestion1'),
-    t('chat.suggestion2'),
-    t('chat.suggestion3'),
-    t('chat.suggestion4'),
+    lang === "es"
+      ? "Viajar al Eje Cafetero"
+      : "Travel to the Coffee Region",
   ];
 
-  const ejeCafeteroFlightsPayload: ChatCardPayload = {
+  const buildEjeCafeteroFlightsPayload = (startDate: string, endDate: string): ChatCardPayload => ({
     destination: "Eje Cafetero (Salento, Filandia y Pereira)",
-    startDate: "2026-05-10",
-    endDate: "2026-05-14",
-    budget: "$440.000 COP (vuelos base)",
+    startDate,
+    endDate,
+    budget: "$398.000 - $515.000 COP (vuelos)",
     details: {
       flights: [
         {
-          date: "2026-05-10",
+          date: startDate,
           route: "Bogotá (BOG) → Pereira (PEI)",
-          airline: "LATAM",
-          time: "07:20 - 08:18",
-          price: "$210.000 COP",
+          airline: "JetSMART",
+          time: "09:10 - 10:08",
+          price: "$189.000 COP",
         },
         {
-          date: "2026-05-14",
+          date: endDate,
           route: "Pereira (PEI) → Bogotá (BOG)",
-          airline: "Avianca",
-          time: "18:45 - 19:40",
-          price: "$230.000 COP",
+          airline: "JetSMART",
+          time: "20:05 - 21:02",
+          price: "$209.000 COP",
         },
       ],
       hotel: null,
     },
-  };
+  });
 
   const ejeCafeteroHotelOptions: HotelOption[] = [
     {
@@ -120,48 +117,186 @@ export function AIChat() {
     },
   ];
 
-  const ejeCafeteroFlightAlternatives: FlightOption[] = [
-    {
-      label: "Opción flexible",
-      budget: "$398.000 COP",
-      flights: [
-        {
-          date: "2026-05-10",
-          route: "Bogotá (BOG) → Pereira (PEI)",
-          airline: "JetSMART",
-          time: "09:10 - 10:08",
-          price: "$189.000 COP",
-        },
-        {
-          date: "2026-05-14",
-          route: "Pereira (PEI) → Bogotá (BOG)",
-          airline: "JetSMART",
-          time: "20:05 - 21:02",
-          price: "$209.000 COP",
-        },
-      ],
-    },
-    {
-      label: "Opción cómoda",
-      budget: "$515.000 COP",
-      flights: [
-        {
-          date: "2026-05-10",
-          route: "Bogotá (BOG) → Armenia (AXM)",
-          airline: "Avianca",
-          time: "06:35 - 07:34",
-          price: "$255.000 COP",
-        },
-        {
-          date: "2026-05-14",
-          route: "Armenia (AXM) → Bogotá (BOG)",
-          airline: "LATAM",
-          time: "17:25 - 18:24",
-          price: "$260.000 COP",
-        },
-      ],
-    },
-  ];
+  const buildEjeCafeteroFlightAlternatives = (startDate: string, endDate: string): FlightOption[] => [
+      {
+        label: "Opción flexible",
+        budget: "$398.000 COP",
+        flights: [
+          {
+            date: startDate,
+            route: "Bogotá (BOG) → Pereira (PEI)",
+            airline: "JetSMART",
+            time: "09:10 - 10:08",
+            price: "$189.000 COP",
+          },
+          {
+            date: endDate,
+            route: "Pereira (PEI) → Bogotá (BOG)",
+            airline: "JetSMART",
+            time: "20:05 - 21:02",
+            price: "$209.000 COP",
+          },
+        ],
+      },
+      {
+        label: "Opción cómoda",
+        budget: "$515.000 COP",
+        flights: [
+          {
+            date: startDate,
+            route: "Bogotá (BOG) → Armenia (AXM)",
+            airline: "Avianca",
+            time: "06:35 - 07:34",
+            price: "$255.000 COP",
+          },
+          {
+            date: endDate,
+            route: "Armenia (AXM) → Bogotá (BOG)",
+            airline: "LATAM",
+            time: "17:25 - 18:24",
+            price: "$260.000 COP",
+          },
+        ],
+      },
+    ];
+
+  const DatePickerCard = ({ onConfirm }: { onConfirm: (startDate: string, endDate: string) => void }) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const [startDate, setStartDate] = useState("");
+    const [endDate, setEndDate] = useState("");
+    const [error, setError] = useState("");
+
+    const handleConfirm = () => {
+      if (!startDate || !endDate) {
+        setError("Selecciona fecha de ida y fecha de regreso.");
+        return;
+      }
+
+      if (endDate <= startDate) {
+        setError("La fecha de regreso debe ser posterior a la ida.");
+        return;
+      }
+
+      setError("");
+      onConfirm(startDate, endDate);
+    };
+
+    return (
+      <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 text-white space-y-4">
+        <div>
+          <h4 className="font-semibold text-sm uppercase tracking-wide text-cyan-300">
+            Fechas para Eje Cafetero
+          </h4>
+          <p className="text-xs text-gray-300 mt-1">
+            Por ahora el demo solo arma vuelos hacia el Eje Cafetero. Elige tus fechas y te muestro 2 opciones.
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label className="space-y-1">
+            <span className="text-xs text-gray-300">Fecha de ida</span>
+            <input
+              type="date"
+              min={today}
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+              className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-300"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-xs text-gray-300">Fecha de regreso</span>
+            <input
+              type="date"
+              min={startDate || today}
+              value={endDate}
+              onChange={(event) => setEndDate(event.target.value)}
+              className="w-full rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-cyan-300"
+            />
+          </label>
+        </div>
+        {error && <p className="text-xs text-red-200">{error}</p>}
+        <button
+          onClick={handleConfirm}
+          className="w-full bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+        >
+          Buscar vuelos para estas fechas
+        </button>
+      </div>
+    );
+  };
+
+  const HotelOptionsCard = ({
+    request,
+    intro,
+  }: {
+    request: ChatChangeRequest;
+    intro?: string;
+  }) => {
+    const [expandedHotels, setExpandedHotels] = useState<Record<string, boolean>>({});
+
+    return (
+      <div className="space-y-4">
+        {intro && <p className="text-sm text-gray-200">{intro}</p>}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {ejeCafeteroHotelOptions.map((option) => {
+            const expansionKey = `${request.tripId}-${option.name}`;
+            const expanded = Boolean(expandedHotels[expansionKey]);
+
+            return (
+              <div key={option.name} className="space-y-3">
+                <HotelCard
+                  name={option.name}
+                  location={option.location}
+                  rating={option.rating}
+                  price={option.pricePerNight}
+                  image={option.image}
+                  amenities={option.amenities}
+                  detailsOpen={expanded}
+                  onDetailsClick={() =>
+                    setExpandedHotels((prev) => ({
+                      ...prev,
+                      [expansionKey]: !prev[expansionKey],
+                    }))
+                  }
+                />
+                <div className="bg-white/10 rounded-xl border border-white/20 p-3 text-xs text-gray-200 space-y-2">
+                  <p>Check-in: {request.startDate}</p>
+                  <p>Check-out: {request.endDate}</p>
+                  <button
+                    onClick={() =>
+                      setExpandedHotels((prev) => ({
+                        ...prev,
+                        [expansionKey]: !prev[expansionKey],
+                      }))
+                    }
+                    className="text-cyan-200 font-semibold hover:text-cyan-100 transition-colors"
+                  >
+                    {expanded ? "Ver menos" : "Ver más"}
+                  </button>
+                  {expanded && (
+                    <div className="pt-2 border-t border-white/10 space-y-1">
+                      <p className="font-semibold text-cyan-100">Incluye:</p>
+                      {option.highlights.map((item) => (
+                        <p key={item}>• {item}</p>
+                      ))}
+                      <p>• Incluye fechas seleccionadas en tu itinerario</p>
+                      <p>• Precio por noche: {option.pricePerNight}</p>
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => saveHotelOptionForTrip(request, option)}
+                  disabled={savingHotel}
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {savingHotel ? "Guardando hotel..." : `Seleccionar ${option.name}`}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   const saveFlightAlternativeForTrip = (request: ChatChangeRequest, option: FlightOption) => {
     const previousDetails = getItineraryDetails(request.tripId) ?? { flights: [], hotel: null };
@@ -221,7 +356,7 @@ export function AIChat() {
 
   const buildFlightChangeCard = (request: ChatChangeRequest) => (
     <div className="space-y-4">
-      {ejeCafeteroFlightAlternatives.map((option) => (
+      {buildEjeCafeteroFlightAlternatives(request.startDate, request.endDate).map((option) => (
         <div key={option.label} className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 text-white space-y-3">
           <div className="flex items-center justify-between gap-3">
             <h4 className="font-semibold text-sm uppercase tracking-wide text-cyan-300">{option.label}</h4>
@@ -249,33 +384,93 @@ export function AIChat() {
     </div>
   );
 
-  const buildHotelChangeCard = (request: ChatChangeRequest) => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {ejeCafeteroHotelOptions.map((option) => (
-        <div key={option.name} className="space-y-3">
-          <HotelCard
-            name={option.name}
-            location={option.location}
-            rating={option.rating}
-            price={option.pricePerNight}
-            image={option.image}
-            amenities={option.amenities}
-          />
-          <div className="bg-white/10 rounded-xl border border-white/20 p-3 text-xs text-gray-200 space-y-1">
-            {option.highlights.map((item) => (
-              <p key={item}>• {item}</p>
+  const showFlightOptionsForDates = (startDate: string, endDate: string) => {
+    const options = buildEjeCafeteroFlightAlternatives(startDate, endDate);
+    setMessages((prev) => [
+      ...prev,
+      {
+        type: "ai",
+        content: `Listo. Para viajar al Eje Cafetero del ${startDate} al ${endDate}, encontré estas 2 opciones de vuelos. Elige una para guardarla en Mis itinerarios.`,
+        card: (
+          <div className="space-y-4">
+            {options.map((option) => (
+              <div key={option.label} className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 text-white space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="font-semibold text-sm uppercase tracking-wide text-cyan-300">{option.label}</h4>
+                  <span className="text-xs text-gray-300">{option.budget}</span>
+                </div>
+                {option.flights.map((flight) => (
+                  <div key={`${option.label}-${flight.date}-${flight.route}`} className="rounded-xl bg-white/10 p-3 flex items-start gap-3">
+                    <Plane className="w-4 h-4 mt-0.5 text-cyan-300" />
+                    <div>
+                      <p className="text-sm font-medium">{flight.route}</p>
+                      <p className="text-xs text-gray-300">
+                        {flight.date} • {flight.airline} • {flight.time} • {flight.price}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  onClick={() =>
+                    saveProposalToItineraries({
+                      ...buildEjeCafeteroFlightsPayload(startDate, endDate),
+                      budget: option.budget,
+                      details: {
+                        flights: option.flights,
+                        hotel: null,
+                      },
+                    })
+                  }
+                  disabled={savingProposal}
+                  className="w-full bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {savingProposal ? "Guardando..." : "Aceptar estos vuelos"}
+                </button>
+              </div>
             ))}
           </div>
-          <button
-            onClick={() => saveHotelOptionForTrip(request, option)}
-            className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
-          >
-            Usar este hotel
-          </button>
-        </div>
-      ))}
-    </div>
+        ),
+      },
+    ]);
+  };
+
+  const buildHotelChangeCard = (request: ChatChangeRequest) => (
+    <HotelOptionsCard request={request} />
   );
+
+  const showHotelOptionsForTrip = (request: ChatChangeRequest) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        type: "user",
+        content: "Sí, quiero agendar hotel",
+      },
+      {
+        type: "ai",
+        content: `En las fechas que seleccionaste, del ${request.startDate} al ${request.endDate}, hay estas dos opciones de hoteles.`,
+        card: (
+          <HotelOptionsCard
+            request={request}
+            intro="Puedes abrir Ver más para revisar lo que incluye cada hotel antes de seleccionarlo."
+          />
+        ),
+      },
+    ]);
+  };
+
+  const declineHotelsForNow = () => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        type: "user",
+        content: "No, por ahora no",
+      },
+      {
+        type: "ai",
+        content: "Está bien. Quedo atento por si luego quieres agregar hotel u organizar otra parte del viaje.",
+      },
+    ]);
+  };
 
   useEffect(() => {
     const request = (location.state as any)?.chatRequest as ChatChangeRequest | undefined;
@@ -348,7 +543,7 @@ export function AIChat() {
       ...prev,
       {
         type: "ai",
-        content: "Listo. Guardé los vuelos en Mis itinerarios y ya quedaron marcados en el calendario por fecha.",
+        content: "Listo. Guardé los vuelos en Mis itinerarios. ¿Quieres que también agendemos hotel para esas fechas?",
         card: (
           <div className="space-y-3">
             <button
@@ -357,9 +552,28 @@ export function AIChat() {
             >
               Ver Calendario
             </button>
-            <p className="text-xs text-gray-300">
-              Cuando quieras, seguimos con la segunda parte: selección y confirmación del hotel.
-            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() =>
+                  showHotelOptionsForTrip({
+                    type: "hotel",
+                    tripId: insertedTrip.id,
+                    destination: payload.destination,
+                    startDate: payload.startDate,
+                    endDate: payload.endDate,
+                  })
+                }
+                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+              >
+                Sí, agendar hotel
+              </button>
+              <button
+                onClick={declineHotelsForNow}
+                className="bg-white/10 border border-white/20 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/15 transition-colors"
+              >
+                No, por ahora
+              </button>
+            </div>
           </div>
         ),
       },
@@ -489,197 +703,68 @@ export function AIChat() {
         content: t('chat.aiResponsePrefix'),
       };
 
-      if (lowerInput.includes("cartagena")) {
-        aiResponse.card = (
-          <div className="space-y-4">
-            <ItineraryCard
-              destination="Cartagena de Indias"
-              duration="3 días"
-              budget="$800.000 - $1.200.000 COP"
-              days={[
-                {
-                  day: 1,
-                  title: "Ciudad Amurallada y Getsemaní",
-                  time: "Todo el día",
-                  activities: [
-                    "Caminata por el Centro Histórico",
-                    "Atardecer en las Murallas (Café del Mar)",
-                    "Cena en el barrio Getsemaní",
-                  ],
-                },
-                {
-                  day: 2,
-                  title: "Islas del Rosario",
-                  time: "8:00 - 16:00",
-                  activities: [
-                    "Tour en lancha a las islas",
-                    "Snorkeling en aguas cristalinas",
-                    "Almuerzo típico caribeño",
-                  ],
-                },
-                {
-                  day: 3,
-                  title: "Castillo San Felipe y Popa",
-                  time: "9:00 - 13:00",
-                  activities: [
-                    "Visita al Castillo de San Felipe",
-                    "Vista panorámica desde el Convento de la Popa",
-                  ],
-                },
-              ]}
-            />
-            <MapPreview location="Cartagena, Colombia" coordinates="10.3910° N, 75.4794° W" />
+      if (isHotelPrompt) {
+        const lastTripId = getLastTripId();
+        const lastTripDetails = lastTripId ? getItineraryDetails(lastTripId) : null;
+        aiResponse.content = lastTripDetails?.flights?.length
+          ? "Claro. ¿Quieres que también agendemos hotel para las fechas de tu último viaje al Eje Cafetero?"
+          : "Para agendar hotel primero necesito que aceptes vuelos del Eje Cafetero y sus fechas.";
+        aiResponse.card = lastTripDetails?.flights?.length && lastTripId ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <button
+              onClick={() =>
+                showHotelOptionsForTrip({
+                  type: "hotel",
+                  tripId: lastTripId,
+                  destination: "Eje Cafetero (Salento, Filandia y Pereira)",
+                  startDate: lastTripDetails.flights[0]?.date ?? "",
+                  endDate: lastTripDetails.flights[lastTripDetails.flights.length - 1]?.date ?? "",
+                })
+              }
+              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+            >
+              Sí, agendar hotel
+            </button>
+            <button
+              onClick={declineHotelsForNow}
+              className="bg-white/10 border border-white/20 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/15 transition-colors"
+            >
+              No, por ahora
+            </button>
           </div>
-        );
-      } else if (lowerInput.includes("medellín") || lowerInput.includes("medellin")) {
-        aiResponse.card = (
-          <div className="space-y-4">
-            <ItineraryCard
-              destination="Medellín y Guatapé"
-              duration="4 días"
-              budget="$700.000 - $1.100.000 COP"
-              days={[
-                {
-                  day: 1,
-                  title: "Transformación Social",
-                  time: "Tarde",
-                  activities: ["Tour Comuna 13", "Metrocable", "Plaza Botero"],
-                },
-                {
-                  day: 2,
-                  title: "Pueblo de Zócalos",
-                  time: "Todo el día",
-                  activities: ["Piedra del Peñol (740 escalones)", "Pueblo de Guatapé", "Paseo en lancha"],
-                },
-              ]}
-            />
-          </div>
-        );
-      } else if (isHotelPrompt) {
-        aiResponse.content =
-          "Excelente. Aquí tienes 2 opciones bien rankeadas para hospedarte en el Eje Cafetero. Elige una y la guardo en tu calendario.";
-        aiResponse.card = (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {ejeCafeteroHotelOptions.map((option) => (
-                <div key={option.name} className="space-y-3">
-                  <HotelCard
-                    name={option.name}
-                    location={option.location}
-                    rating={option.rating}
-                    price={option.pricePerNight}
-                    image={option.image}
-                    amenities={option.amenities}
-                  />
-                  <div className="bg-white/10 rounded-xl border border-white/20 p-3 text-xs text-gray-200 space-y-1">
-                    {option.highlights.map((item) => (
-                      <p key={item}>• {item}</p>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => saveHotelForLatestEjeTrip(option)}
-                    disabled={savingHotel}
-                    className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {savingHotel ? "Guardando hotel..." : `Seleccionar ${option.name}`}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
+        ) : undefined;
       } else if (isEjePrompt) {
         aiResponse.content =
-          "Perfecto. Empezamos por partes: primero te muestro vuelos sugeridos para Eje Cafetero. Si aceptas, ahí mismo los guardo en Mis itinerarios.";
+          "Perfecto. Por ahora tengo habilitado el flujo del Eje Cafetero. ¿En qué fechas quieres volar?";
         aiResponse.card = (
-          <div className="space-y-4">
-            <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-4 text-white space-y-3">
-              <h4 className="font-semibold text-sm uppercase tracking-wide text-cyan-300">
-                Vuelos sugeridos (Parte 1)
-              </h4>
-              {ejeCafeteroFlightsPayload.details.flights.map((flight) => (
-                <div key={`${flight.date}-${flight.route}`} className="rounded-xl bg-white/10 p-3 flex items-start gap-3">
-                  <Plane className="w-4 h-4 mt-0.5 text-cyan-300" />
-                  <div>
-                    <p className="text-sm font-medium">{flight.route}</p>
-                    <p className="text-xs text-gray-300">
-                      {flight.date} • {flight.airline} • {flight.time} • {flight.price}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              <div className="pt-3 border-t border-white/10">
-                <button
-                  onClick={() => saveProposalToItineraries(ejeCafeteroFlightsPayload)}
-                  disabled={savingProposal}
-                  className="w-full bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {savingProposal ? "Guardando..." : "Aceptar vuelos y guardar en Mis itinerarios"}
-                </button>
-                <p className="text-xs text-gray-300 mt-2">
-                  Solo se guardará cuando presiones Aceptar.
-                </p>
-              </div>
-            </div>
-          </div>
+          <DatePickerCard onConfirm={showFlightOptionsForDates} />
         );
       } else {
-        aiResponse.content = "Si quieres, te armo un viaje completo al Eje Cafetero con vuelos y hotel para guardarlo directo en Mis itinerarios.";
+        aiResponse.content = "Hola, solo puedo agendar viajes al Eje Cafetero por el momento.";
         aiResponse.card = (
-          <ItineraryCard
-            destination="Eje Cafetero"
-            duration="4 días"
-            budget="$600.000 - $1.000.000 COP"
-            days={[
-              {
-                day: 1,
-                title: "Valle de Cocora",
-                time: "Todo el día",
-                activities: ["Caminata entre Palmas de Cera", "Salento (Calle Real)", "Miradores"],
-              },
-              {
-                day: 2,
-                title: "Cultura Cafetera",
-                time: "9:00 - 17:00",
-                activities: ["Tour en finca cafetera", "Proceso del café", "Cata de café especial"],
-              },
-            ]}
-          />
+          <button
+            onClick={() => {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  type: "user",
+                  content: "Quiero viajar al Eje Cafetero",
+                },
+                {
+                  type: "ai",
+                  content: "Perfecto. Por ahora tengo habilitado el flujo del Eje Cafetero. ¿En qué fechas quieres volar?",
+                  card: <DatePickerCard onConfirm={showFlightOptionsForDates} />,
+                },
+              ]);
+            }}
+            className="w-full md:w-auto bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+          >
+            Agendar viaje al Eje Cafetero
+          </button>
         );
       }
       setMessages((prev) => [...prev, aiResponse]);
 
-      if (!(isEjePrompt || isHotelPrompt)) {
-        setTimeout(() => {
-          setMessages((prev) => [
-            ...prev,
-            {
-              type: "ai",
-              content: "Aquí tienes algunas opciones recomendadas de alojamiento y gastronomía en la zona:",
-              card: (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <HotelCard
-                    name="Casa San Agustín"
-                    location="Centro Histórico"
-                    rating={4.9}
-                    price="$850.000"
-                    image="https://images.unsplash.com/photo-1578683010236-d716f9a3f461?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBob3RlbCUyMHJvb218ZW58MXx8fHwxNzczNzIxNzU3fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
-                    amenities={["wifi", "breakfast", "pool"]}
-                  />
-                  <RestaurantCard
-                    name="Carmen Restaurant"
-                    cuisine="Contemporánea Colombiana"
-                    location="El Poblado / Cartagena"
-                    rating={4.8}
-                    hours="12:00 - 23:00"
-                    image="https://images.unsplash.com/photo-1717158776685-d4b7c346e1a7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxyZXN0YXVyYW50JTIwZm9vZCUyMHBsYXR0ZXJ8ZW58MXx8fHwxNzczNjg1NDc2fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
-                  />
-                </div>
-              ),
-            },
-          ]);
-        }, 1000);
-      }
     }, 1000);
 
     setInput("");

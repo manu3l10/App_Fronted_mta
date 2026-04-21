@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { ArrowLeft, MapPin, Calendar, DollarSign, Star, Trash2, Plane, Building2, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, DollarSign, Star, Trash2, Plane, Building2, ChevronLeft, ChevronRight, X, Heart } from "lucide-react";
 import { useNavigate } from "react-router";
 import { supabase } from "../../lib/supabase";
 import { ItineraryDetails, deleteItineraryDetails, getItineraryDetails, saveItineraryDetails, setLastTripId } from "../../lib/itineraryDetails";
 import { buildSignalsByDate } from "../../lib/calendarSignals";
+import { buildPlaceKey, listPlaceFavorites, togglePlaceFavorite } from "../../lib/placeFavorites";
 
 interface SavedItinerary {
   id: string | number;
@@ -25,6 +26,9 @@ export function Itineraries() {
   const [loading, setLoading] = useState(true);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [editingItinerary, setEditingItinerary] = useState<SavedItinerary | null>(null);
+  const [viewingItinerary, setViewingItinerary] = useState<SavedItinerary | null>(null);
+  const [favoritePlaceKeys, setFavoritePlaceKeys] = useState<Set<string>>(new Set());
+  const [favoritePendingKey, setFavoritePendingKey] = useState<string | null>(null);
 
   const year = calendarDate.getFullYear();
   const month = calendarDate.getMonth();
@@ -82,7 +86,17 @@ export function Itineraries() {
 
   useEffect(() => {
     fetchItineraries();
+    fetchPlaceFavorites();
   }, []);
+
+  const fetchPlaceFavorites = async () => {
+    try {
+      const data = await listPlaceFavorites(["hotel", "restaurant"]);
+      setFavoritePlaceKeys(new Set(data.map((item) => item.place_key)));
+    } catch (error) {
+      console.error("Error fetching place favorites:", error);
+    }
+  };
 
   const deleteItinerary = async (id: string | number) => {
     const { error } = await supabase
@@ -133,6 +147,50 @@ export function Itineraries() {
         },
       },
     });
+  };
+
+  const getHotelFavoriteKey = (hotel: NonNullable<ItineraryDetails["hotel"]>) =>
+    buildPlaceKey("hotel", hotel.name, hotel.location);
+
+  const toggleHotelFavorite = async (itinerary: SavedItinerary) => {
+    const hotel = itinerary.details?.hotel;
+    if (!hotel) return;
+
+    const placeKey = getHotelFavoriteKey(hotel);
+    setFavoritePendingKey(placeKey);
+
+    try {
+      const result = await togglePlaceFavorite({
+        itemType: "hotel",
+        name: hotel.name,
+        location: hotel.location,
+        imageUrl: hotel.image ?? itinerary.image,
+        rating: itinerary.rating ?? 4.7,
+        description: `${hotel.pricePerNight} por noche. Check-in ${hotel.checkIn}, check-out ${hotel.checkOut}.`,
+        metadata: {
+          tripId: itinerary.id,
+          destination: itinerary.destination,
+          checkIn: hotel.checkIn,
+          checkOut: hotel.checkOut,
+          pricePerNight: hotel.pricePerNight,
+        },
+      });
+
+      setFavoritePlaceKeys((prev) => {
+        const next = new Set(prev);
+        if (result.favorited) {
+          next.add(placeKey);
+        } else {
+          next.delete(placeKey);
+        }
+        return next;
+      });
+    } catch (error: any) {
+      console.error("Error toggling hotel favorite:", error);
+      window.alert(error?.message ?? "No se pudo actualizar el favorito.");
+    } finally {
+      setFavoritePendingKey(null);
+    }
   };
 
   return (
@@ -347,7 +405,10 @@ export function Itineraries() {
                 )}
 
                 <div className="flex gap-2">
-                  <button className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow">
+                  <button
+                    onClick={() => setViewingItinerary(itinerary)}
+                    className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
+                  >
                     Ver itinerario
                   </button>
                   <button
@@ -381,6 +442,117 @@ export function Itineraries() {
           </motion.div>
         )}
       </div>
+
+      {viewingItinerary && (
+        <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, y: 18, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-purple-100"
+          >
+            <div className="relative h-48 overflow-hidden">
+              <img
+                src={viewingItinerary.details?.hotel?.image || viewingItinerary.image}
+                alt={viewingItinerary.destination}
+                className="h-full w-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+              <button
+                onClick={() => setViewingItinerary(null)}
+                className="absolute right-4 top-4 rounded-lg bg-white/90 p-2 text-slate-700 shadow-lg hover:bg-white"
+                aria-label="Cerrar detalle"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="absolute bottom-4 left-5 right-5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-purple-100">Detalle del itinerario</p>
+                <h2 className="text-2xl font-semibold text-white">{viewingItinerary.destination}</h2>
+                <p className="text-sm text-white/85">{viewingItinerary.dates}</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-5">
+              <section className="rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Plane className="w-4 h-4 text-blue-600" />
+                  <h3 className="font-semibold text-blue-950">Vuelos guardados</h3>
+                </div>
+
+                {viewingItinerary.details?.flights?.length ? (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {viewingItinerary.details.flights.map((flight, index) => (
+                      <div key={`${flight.date}-${flight.route}-${index}`} className="rounded-lg bg-white border border-blue-100 p-3">
+                        <p className="font-medium text-slate-900">{flight.route}</p>
+                        <p className="text-xs text-slate-600 mt-1">{flight.date}</p>
+                        <p className="text-xs text-slate-600">{flight.airline} • {flight.time}</p>
+                        <p className="text-xs font-medium text-blue-700 mt-1">{flight.price}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-600">No hay vuelos confirmados para este itinerario.</p>
+                )}
+              </section>
+
+              <section className="rounded-xl border border-purple-100 bg-purple-50/70 p-4">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-purple-600" />
+                    <h3 className="font-semibold text-purple-950">Hotel</h3>
+                  </div>
+                  {viewingItinerary.details?.hotel && (
+                    <button
+                      onClick={() => toggleHotelFavorite(viewingItinerary)}
+                      disabled={favoritePendingKey === getHotelFavoriteKey(viewingItinerary.details.hotel)}
+                      className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:opacity-70 ${
+                        favoritePlaceKeys.has(getHotelFavoriteKey(viewingItinerary.details.hotel))
+                          ? "bg-pink-100 text-pink-700 border border-pink-200"
+                          : "bg-white text-purple-700 border border-purple-200 hover:bg-purple-50"
+                      }`}
+                    >
+                      <Heart
+                        className={`w-4 h-4 ${
+                          favoritePlaceKeys.has(getHotelFavoriteKey(viewingItinerary.details.hotel))
+                            ? "fill-pink-500 text-pink-500"
+                            : "text-purple-600"
+                        }`}
+                      />
+                      {favoritePlaceKeys.has(getHotelFavoriteKey(viewingItinerary.details.hotel))
+                        ? "En favoritos"
+                        : "Añadir a favoritos"}
+                    </button>
+                  )}
+                </div>
+
+                {viewingItinerary.details?.hotel ? (
+                  <div className="grid gap-4 md:grid-cols-[180px_1fr]">
+                    <img
+                      src={viewingItinerary.details.hotel.image || viewingItinerary.image}
+                      alt={viewingItinerary.details.hotel.name}
+                      className="h-40 w-full rounded-lg object-cover"
+                    />
+                    <div className="rounded-lg bg-white border border-purple-100 p-3 text-sm text-slate-700">
+                      <p className="font-semibold text-slate-900">{viewingItinerary.details.hotel.name}</p>
+                      <p className="text-xs mt-1">{viewingItinerary.details.hotel.location}</p>
+                      <p className="text-xs mt-2">
+                        Estadía: {viewingItinerary.details.hotel.checkIn} al {viewingItinerary.details.hotel.checkOut}
+                      </p>
+                      <p className="text-xs font-medium text-purple-700 mt-1">
+                        {viewingItinerary.details.hotel.pricePerNight} por noche
+                      </p>
+                      <p className="text-xs text-slate-500 mt-3">
+                        Guardado dentro de este viaje. Puedes marcarlo como favorito para encontrarlo luego en la sección Favoritos.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-600">Aún no hay hotel confirmado para este itinerario.</p>
+                )}
+              </section>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {editingItinerary && (
         <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center p-4">

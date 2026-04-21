@@ -10,9 +10,20 @@ interface HotelCardProps {
   price: string;
   image: string;
   amenities?: string[];
+  onDetailsClick?: () => void;
+  detailsOpen?: boolean;
 }
 
-export function HotelCard({ name, location, rating, price, image, amenities = [] }: HotelCardProps) {
+export function HotelCard({
+  name,
+  location,
+  rating,
+  price,
+  image,
+  amenities = [],
+  onDetailsClick,
+  detailsOpen = false,
+}: HotelCardProps) {
   const amenityIcons: Record<string, any> = {
     wifi: Wifi,
     breakfast: Coffee,
@@ -76,8 +87,12 @@ export function HotelCard({ name, location, rating, price, image, amenities = []
             <span className="text-lg font-semibold text-purple-300">{price}</span>
             <span className="text-sm text-gray-400 ml-1">/ noche</span>
           </div>
-          <button className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg hover:shadow-purple-500/50 transition-all">
-            Ver más
+          <button
+            type="button"
+            onClick={onDetailsClick}
+            className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg hover:shadow-purple-500/50 transition-all"
+          >
+            {detailsOpen ? "Ver menos" : "Ver más"}
           </button>
         </div>
       </div>

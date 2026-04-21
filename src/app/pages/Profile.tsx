@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowLeft, MapPin, Calendar, Award, Camera, Edit, LogOut, Loader2, X, User, FileText } from "lucide-react";
 import { useNavigate } from "react-router";
@@ -8,6 +8,7 @@ import { useLanguage } from "../../contexts/LanguageContext";
 export function Profile() {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [user, setUser] = useState<any>(null);
   const [tripCount, setTripCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -16,6 +17,7 @@ export function Profile() {
   const [nameInput, setNameInput] = useState("");
   const [bioInput, setBioInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -42,10 +44,93 @@ export function Profile() {
     fetchData();
   }, []);
 
+  const getAvatarUrl = () =>
+    user?.user_metadata?.avatar_url || user?.user_metadata?.picture || "";
+
+  const getUserInitial = () =>
+    user?.user_metadata?.full_name?.[0]?.toUpperCase() ||
+    user?.email?.[0]?.toUpperCase() ||
+    "V";
+
+  const handleAvatarClick = () => {
+    if (avatarUploading) return;
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file || !user) return;
+    if (!file.type.startsWith("image/")) {
+      alert("Selecciona una imagen valida para tu foto de perfil.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert("La foto debe pesar maximo 5 MB.");
+      return;
+    }
+
+    setAvatarUploading(true);
+    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const safeExtension = extension.replace(/[^a-z0-9]/g, "") || "jpg";
+    const filePath = `${user.id}/${Date.now()}.${safeExtension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(filePath, file, {
+        cacheControl: "3600",
+        upsert: true,
+        contentType: file.type,
+      });
+
+    if (uploadError) {
+      setAvatarUploading(false);
+      alert("Error subiendo la foto: " + uploadError.message);
+      return;
+    }
+
+    const { data: publicData } = supabase.storage
+      .from("avatars")
+      .getPublicUrl(filePath);
+
+    const avatarUrl = publicData.publicUrl;
+    const nextMetadata = {
+      ...(user.user_metadata ?? {}),
+      avatar_url: avatarUrl,
+      picture: avatarUrl,
+    };
+
+    const { data, error } = await supabase.auth.updateUser({
+      data: nextMetadata,
+    });
+
+    if (error) {
+      setAvatarUploading(false);
+      alert("La foto subio, pero no se pudo actualizar el perfil: " + error.message);
+      return;
+    }
+
+    await Promise.all([
+      supabase
+        .from("community_posts")
+        .update({ author_avatar: avatarUrl })
+        .eq("user_id", user.id),
+      supabase
+        .from("community_comments")
+        .update({ author_avatar: avatarUrl })
+        .eq("user_id", user.id),
+    ]);
+
+    setUser(data.user);
+    setAvatarUploading(false);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     const { data, error } = await supabase.auth.updateUser({
       data: {
+        ...(user?.user_metadata ?? {}),
         full_name: nameInput,
         bio: bioInput
       }
@@ -187,14 +272,35 @@ export function Profile() {
           <div className="flex flex-col items-center text-center">
             {/* Avatar */}
             <div className="relative mb-4">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-3xl font-semibold">
-                {user?.user_metadata?.full_name?.[0].toUpperCase() || user?.email?.[0].toUpperCase() || "V"}
-              </div>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                onChange={handleAvatarChange}
+                className="hidden"
+              />
+              {getAvatarUrl() ? (
+                <img
+                  src={getAvatarUrl()}
+                  alt="Foto de perfil"
+                  className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-3xl font-semibold">
+                  {getUserInitial()}
+                </div>
+              )}
               <button
-                onClick={() => setIsEditing(true)}
-                className="absolute bottom-0 right-0 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-purple-200 hover:bg-purple-50 transition-colors"
+                onClick={handleAvatarClick}
+                disabled={avatarUploading}
+                className="absolute bottom-0 right-0 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center border-2 border-purple-200 hover:bg-purple-50 transition-colors disabled:opacity-70"
+                title="Cambiar foto de perfil"
               >
-                <Camera className="w-4 h-4 text-purple-600" />
+                {avatarUploading ? (
+                  <Loader2 className="w-4 h-4 text-purple-600 animate-spin" />
+                ) : (
+                  <Camera className="w-4 h-4 text-purple-600" />
+                )}
               </button>
             </div>
 
