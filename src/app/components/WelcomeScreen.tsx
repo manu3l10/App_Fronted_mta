@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import { Sparkles, Mail, Lock, UserPlus, LogIn, Loader2 } from "lucide-react";
+import { Mail, Lock, UserPlus, LogIn, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLanguage } from "../../contexts/LanguageContext";
 import { supabase } from "../../lib/supabase";
@@ -74,10 +74,25 @@ function isAndroidEmbeddedBrowser() {
   return isAndroid && (isWebView || isInAppBrowser);
 }
 
-// Google icon SVG component
+function MtaLogo() {
+  return (
+    <div className="relative h-[104px] w-[104px] md:h-28 md:w-28" aria-label="MTA">
+      <div className="absolute inset-0 rounded-[28px] bg-gradient-to-br from-blue-500 via-cyan-400 to-indigo-500 shadow-2xl shadow-cyan-500/30" />
+      <div className="absolute inset-[3px] rounded-[25px] bg-slate-950/95" />
+      <div className="absolute inset-[9px] rounded-[20px] border border-white/15 bg-gradient-to-br from-white/12 to-white/[0.03]" />
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-white text-[30px] md:text-[34px] font-black tracking-normal leading-none">
+          MTA
+        </span>
+        <span className="mt-1 h-1 w-12 rounded-full bg-cyan-300 shadow-lg shadow-cyan-300/40" />
+      </div>
+    </div>
+  );
+}
+
 function GoogleIcon() {
   return (
-    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg className="h-5 w-5 flex-shrink-0" viewBox="0 0 24 24" aria-hidden="true">
       <path
         d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
         fill="#4285F4"
@@ -110,6 +125,7 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
   const [password, setPassword] = useState("");
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -119,16 +135,19 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
 
     try {
       if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
         onStart?.();
       } else {
-        const { data, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            emailRedirectTo: getOAuthRedirectUrl(),
+          },
         });
         if (error) throw error;
         const { data: confirmData, error: confirmError } = await supabase.auth.signInWithPassword({
@@ -150,21 +169,25 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
   };
 
   const handleGoogleAuth = async () => {
-    setLoading(true);
+    setGoogleLoading(true);
     setError("");
 
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: getOAuthRedirectUrl(),
+          queryParams: {
+            access_type: "offline",
+            prompt: "select_account",
+          },
         },
       });
       if (error) throw error;
     } catch (err: any) {
       console.error("Google OAuth error:", err);
       setError(err.message);
-      setLoading(false);
+      setGoogleLoading(false);
     }
   };
 
@@ -203,27 +226,19 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
       className="relative flex flex-col items-center justify-center overflow-hidden bg-slate-950"
       style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
     >
-      {/* Background - Static for extreme performance on mobile */}
       <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 pointer-events-none z-0" />
-
-      {/* Glow effects - CSS Only */}
       <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_20%_20%,rgba(37,99,235,0.1),transparent_50%)] z-0" />
       <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_80%_80%,rgba(0,163,255,0.1),transparent_50%)] z-0" />
 
-      {/* Main Content */}
-      <main className="relative z-10 w-full px-6 flex flex-col items-center text-center">
+      <main className="relative z-10 w-full px-4 py-5 sm:px-6 flex flex-col items-center text-center overflow-y-auto">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           className="max-w-md w-full"
         >
-          {/* Header */}
-          <div className="mb-8 flex flex-col items-center">
-            <div className="relative w-20 h-20 mb-6">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-cyan-500 to-indigo-500 rounded-2xl animate-pulse shadow-2xl shadow-blue-500/50" />
-              <div className="absolute inset-1 bg-slate-950 rounded-2xl flex items-center justify-center">
-                <Sparkles className="w-8 h-8 text-white" />
-              </div>
+          <div className="mb-6 md:mb-8 flex flex-col items-center">
+            <div className="mb-5 md:mb-6">
+              <MtaLogo />
             </div>
             <h1 className="text-3xl md:text-4xl font-extrabold mb-2 tracking-tight text-white leading-tight">
               My <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">Travel Assistance</span>
@@ -231,19 +246,17 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
             <p className="text-gray-400 text-sm">{t('welcome.subtitle')}</p>
           </div>
 
-          {/* Auth Form */}
-          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl">
+          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 md:p-7 shadow-2xl">
             <h2 className="text-xl font-bold text-white mb-6 text-center">Continúa tu viaje</h2>
 
-            {/* Google OAuth - First Option */}
             <div className="mb-6">
               <button
                 type="button"
                 onClick={handleGoogleAuth}
-                disabled={loading}
-                className="w-full py-4 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl font-semibold text-white transition-all flex items-center justify-center gap-3"
+                disabled={googleLoading || loading}
+                className="w-full min-h-12 rounded-xl border border-white/15 bg-white text-slate-900 font-semibold hover:bg-slate-100 active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                <GoogleIcon />
+                {googleLoading ? <Loader2 className="w-5 h-5 animate-spin text-slate-700" /> : <GoogleIcon />}
                 <span>Continuar con Google</span>
               </button>
 
@@ -255,14 +268,12 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
               )}
             </div>
 
-            {/* Divider */}
             <div className="flex items-center gap-3 mb-6">
               <div className="flex-1 h-px bg-white/10" />
               <span className="text-gray-400 text-xs">O con email</span>
               <div className="flex-1 h-px bg-white/10" />
             </div>
 
-            {/* Email & Password Form */}
             <form onSubmit={handleAuth} className="space-y-4">
               <div className="text-left mb-4">
                 <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
@@ -310,14 +321,14 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
 
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full py-4 bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white rounded-xl font-bold text-lg hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-blue-500/20 flex items-center justify-center gap-2"
+                disabled={loading || googleLoading}
+                className="w-full py-4 bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white rounded-xl font-bold text-lg hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-blue-500/20 flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : (isLogin ? "Entrar" : "Registrarme")}
               </button>
             </form>
 
-            <div className="mt-8 pt-6 border-t border-white/5 flex flex-col gap-4 text-sm">
+            <div className="mt-6 pt-5 border-t border-white/5 flex flex-col gap-4 text-sm">
               <p className="text-gray-500">
                 {isLogin ? "¿No tienes cuenta?" : "¿Ya eres viajero?"}
                 <button
