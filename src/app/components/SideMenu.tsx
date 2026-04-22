@@ -76,8 +76,8 @@ export function SideMenu({ isOpen, onClose }: SideMenuProps) {
             className="fixed left-0 top-0 h-full w-[280px] md:w-80 z-50 shadow-2xl overflow-hidden"
             style={{
               willChange: "transform",
-              paddingTop: "env(safe-area-inset-top)",
-              paddingBottom: "env(safe-area-inset-bottom)",
+              paddingTop: "var(--safe-top)",
+              paddingBottom: "var(--safe-bottom)",
               boxSizing: "border-box",
             }}
           >

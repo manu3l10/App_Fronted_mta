@@ -26,9 +26,9 @@
 6. Añade los **Authorized JavaScript origins**:
    ```
    http://localhost:5173
-   https://tudominio.com
+   https://mta-oficial.vercel.app
    ```
-   (Usa tu dominio real de producción)
+   (Este es el dominio oficial de producción de MTA)
 
 7. Añade los **Authorized redirect URIs**:
    ```
@@ -53,12 +53,12 @@
 1. En **Authentication** > **URL Configuration**
 2. Agrega bajo **Authorized redirect URLs**:
    - `http://localhost:5173` (desarrollo local)
-   - `http://localhost:3000` (si usas otro puerto)
-   - `https://tudominio.com` (producción)
+   - `https://mta-oficial.vercel.app` (producción)
+   - `https://mta-oficial.vercel.app/` (producción con slash final)
 
 3. Agrega bajo **Site URL**:
    - Para desarrollo: `http://localhost:5173`
-   - Para producción: `https://tudominio.com`
+   - Para producción: `https://mta-oficial.vercel.app`
 
 ### 6. Probar el login
 

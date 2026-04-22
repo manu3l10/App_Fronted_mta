@@ -18,6 +18,15 @@ PWA de asistencia de viajes construida con React, Vite y Supabase. La app combin
 - PWA: `manifest.webmanifest`, iconos y modo `standalone`.
 - Despliegue: Vercel con headers de seguridad en `vercel.json`.
 
+## Dominio oficial
+
+- Produccion: `https://mta-oficial.vercel.app`
+- Proyecto Vercel: `mta-oficial`
+- Supabase Auth debe tener como `Site URL` `https://mta-oficial.vercel.app`.
+- Redirect URLs permitidas: `https://mta-oficial.vercel.app`, `https://mta-oficial.vercel.app/` y `http://localhost:5173` solo para desarrollo local.
+
+No uses dominios anteriores para nuevos cambios o pruebas de produccion.
+
 ## Documentacion
 
 - [docs/README.md](docs/README.md)

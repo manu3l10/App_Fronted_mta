@@ -166,11 +166,9 @@ export function Home() {
 
   return (
     <div
-      className="relative flex flex-col overflow-hidden bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900"
+      className="safe-area-shell relative flex flex-col overflow-hidden bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900"
       style={{
         height: 'calc(var(--vh, 1vh) * 100)',
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingBottom: 'env(safe-area-inset-bottom)',
         boxSizing: 'border-box',
       }}
     >

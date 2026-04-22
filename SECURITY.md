@@ -22,11 +22,10 @@ La app es frontend estatico y se conecta directamente a Supabase con la anon key
 
 Para restringir origenes hay que configurar los dominios permitidos en Supabase y Vercel con los dominios reales de produccion.
 
-Dominios que se deben permitir cuando existan:
+Dominios permitidos para MTA:
 
-- dominio de produccion en Vercel
-- dominio preview si el equipo lo usa
+- `https://mta-oficial.vercel.app` como dominio principal de produccion
+- `https://mta-oficial.vercel.app/` para redirects de Auth con slash final
 - `http://localhost:5173` solo para desarrollo local
 
 No se deben permitir comodines como `*` en produccion.
-
