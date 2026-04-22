@@ -49,12 +49,18 @@ export interface CommunityNotificationRecord {
   actor_id: string | null;
   actor_name: string;
   actor_avatar: string;
-  type: 'post_like' | 'comment_like' | 'comment_reply';
+  type: 'post_like' | 'post_comment' | 'comment_like' | 'comment_reply';
   post_id: string | null;
   comment_id: string | null;
   message: string;
   read_at: string | null;
   created_at: string;
+}
+
+export interface CommunityNotificationSettingsRecord {
+  user_id: string;
+  community_notifications_enabled: boolean;
+  updated_at: string;
 }
 
 export interface CommunityFeedSnapshot {
@@ -366,8 +372,10 @@ export const createCommunityComment = async (payload: {
 
   if (error) throw error;
   invalidateCommunityFeedCache();
-  await maybeCreateReplyNotification(data as CommunityCommentRecord, user);
-  return data as CommunityCommentRecord;
+  const createdComment = data as CommunityCommentRecord;
+  await maybeCreatePostCommentNotification(createdComment, user);
+  await maybeCreateReplyNotification(createdComment, user);
+  return createdComment;
 };
 
 export const toggleCommunityLike = async (
@@ -543,6 +551,54 @@ export const markCommunityNotificationAsRead = async (notificationId: string): P
   if (error) throw error;
 };
 
+export const getCommunityNotificationPreference = async (): Promise<boolean> => {
+  const user = await getCurrentUserOrThrow();
+
+  const { data, error } = await supabase
+    .from('community_notification_settings')
+    .select('community_notifications_enabled')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.community_notifications_enabled ?? true;
+};
+
+export const setCommunityNotificationPreference = async (
+  enabled: boolean
+): Promise<boolean> => {
+  const user = await getCurrentUserOrThrow();
+
+  const { data, error } = await supabase
+    .from('community_notification_settings')
+    .upsert(
+      {
+        user_id: user.id,
+        community_notifications_enabled: enabled,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' }
+    )
+    .select('community_notifications_enabled')
+    .single();
+
+  if (error) throw error;
+  return data.community_notifications_enabled;
+};
+
+const areCommunityNotificationsEnabled = async (userId: string): Promise<boolean> => {
+  const { data, error } = await supabase.rpc('are_community_notifications_enabled', {
+    p_user_id: userId,
+  });
+
+  if (error) {
+    console.error("Error checking community notification preference:", error);
+    return true;
+  }
+
+  return data ?? true;
+};
+
 const maybeCreatePostLikeNotification = async (postId: string, actor: User): Promise<void> => {
   const { data: post, error: postError } = await supabase
     .from('community_posts')
@@ -551,6 +607,7 @@ const maybeCreatePostLikeNotification = async (postId: string, actor: User): Pro
     .single();
 
   if (postError || !post || post.user_id === actor.id) return;
+  if (!(await areCommunityNotificationsEnabled(post.user_id))) return;
 
   const { authorName, authorAvatar } = getAuthorProfile(actor);
   await supabase.from('community_notifications').insert({
@@ -561,6 +618,34 @@ const maybeCreatePostLikeNotification = async (postId: string, actor: User): Pro
     type: 'post_like',
     post_id: postId,
     message: `${authorName} le dio like a tu publicación.`,
+  });
+};
+
+const maybeCreatePostCommentNotification = async (
+  comment: CommunityCommentRecord,
+  actor: User
+): Promise<void> => {
+  if (comment.parent_comment_id) return;
+
+  const { data: post, error } = await supabase
+    .from('community_posts')
+    .select('id,user_id')
+    .eq('id', comment.post_id)
+    .single();
+
+  if (error || !post || post.user_id === actor.id) return;
+  if (!(await areCommunityNotificationsEnabled(post.user_id))) return;
+
+  const { authorName, authorAvatar } = getAuthorProfile(actor);
+  await supabase.from('community_notifications').insert({
+    recipient_id: post.user_id,
+    actor_id: actor.id,
+    actor_name: authorName,
+    actor_avatar: authorAvatar,
+    type: 'post_comment',
+    post_id: comment.post_id,
+    comment_id: comment.id,
+    message: `${authorName} comentó tu publicación.`,
   });
 };
 
@@ -577,6 +662,7 @@ const maybeCreateReplyNotification = async (
     .single();
 
   if (error || !parentComment || parentComment.user_id === actor.id) return;
+  if (!(await areCommunityNotificationsEnabled(parentComment.user_id))) return;
 
   const { authorName, authorAvatar } = getAuthorProfile(actor);
   await supabase.from('community_notifications').insert({

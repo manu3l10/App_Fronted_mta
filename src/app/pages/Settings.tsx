@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   ArrowLeft,
@@ -13,12 +13,59 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { useAuth } from "../../contexts/AuthContext";
+import {
+  getCommunityNotificationPreference,
+  setCommunityNotificationPreference,
+} from "../../lib/communityApi";
 
 export function Settings() {
   const navigate = useNavigate();
   const { lang, setLang, t } = useLanguage();
+  const { isAuthReady, user } = useAuth();
   const [notifications, setNotifications] = useState(true);
+  const [notificationsSaving, setNotificationsSaving] = useState(false);
   const [showLangModal, setShowLangModal] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthReady || !user) return;
+
+    let isMounted = true;
+
+    const loadNotificationPreference = async () => {
+      try {
+        const enabled = await getCommunityNotificationPreference();
+        if (isMounted) setNotifications(enabled);
+      } catch (error) {
+        console.error("Error loading notification preference:", error);
+      }
+    };
+
+    void loadNotificationPreference();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthReady, user?.id]);
+
+  const updateNotifications = async (enabled: boolean) => {
+    if (notificationsSaving) return;
+
+    const previous = notifications;
+    setNotifications(enabled);
+    setNotificationsSaving(true);
+
+    try {
+      const saved = await setCommunityNotificationPreference(enabled);
+      setNotifications(saved);
+    } catch (error: any) {
+      console.error("Error updating notification preference:", error);
+      setNotifications(previous);
+      window.alert(error?.message ?? "No se pudo actualizar la configuración de notificaciones.");
+    } finally {
+      setNotificationsSaving(false);
+    }
+  };
 
   interface SettingsItem {
     icon: any;
@@ -42,7 +89,13 @@ export function Settings() {
           action: true,
           onClick: () => setShowLangModal(true)
         },
-        { icon: Bell, label: t('settings.notifications'), toggle: true, state: notifications, setState: setNotifications },
+        {
+          icon: Bell,
+          label: t('settings.notifications'),
+          toggle: true,
+          state: notifications,
+          setState: updateNotifications,
+        },
       ],
     },
     {
@@ -122,7 +175,9 @@ export function Settings() {
                             e.stopPropagation();
                             if (item.setState) item.setState(!item.state);
                           }}
-                          className={`relative w-11 h-6 rounded-full transition-colors ${item.state
+                          disabled={notificationsSaving}
+                          aria-pressed={item.state}
+                          className={`relative w-11 h-6 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${item.state
                             ? "bg-gradient-to-r from-blue-500 to-cyan-500"
                             : "bg-slate-700"
                             }`}

@@ -26,7 +26,7 @@ create table if not exists public.community_notifications (
   actor_id uuid references auth.users(id) on delete set null,
   actor_name text not null default 'viajero',
   actor_avatar text not null default '',
-  type text not null check (type in ('post_like', 'comment_like', 'comment_reply')),
+  type text not null check (type in ('post_like', 'post_comment', 'comment_like', 'comment_reply')),
   post_id uuid references public.community_posts(id) on delete cascade,
   comment_id uuid references public.community_comments(id) on delete cascade,
   message text not null,
@@ -129,4 +129,3 @@ create policy "community_notifications_delete_recipient"
   for delete
   to authenticated
   using (auth.uid() = recipient_id);
-
