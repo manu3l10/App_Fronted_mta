@@ -158,15 +158,20 @@ const buildPostsFromSnapshot = (snapshot: CommunityFeedSnapshot): Post[] =>
   });
 
 const POI_SUGGESTIONS = [
-  "Aeropuerto",
-  "Hotel",
-  "Restaurante",
-  "Mirador",
-  "Playa",
-  "Museo",
-  "Centro histórico",
-  "Parque natural",
+  "Iglesia Pereira",
+  "Aeropuerto Bogotá",
+  "Hotel Medellín",
+  "Restaurante Cartagena",
+  "Mirador Salento",
+  "Museo Bogotá",
 ];
+
+interface PoiSuggestion {
+  id: string;
+  name: string;
+  area: string;
+  displayName: string;
+}
 
 const buildLocationWithPoi = (location: string, poi: string) => {
   const cleanLocation = location.trim();
@@ -177,6 +182,38 @@ const buildLocationWithPoi = (location: string, poi: string) => {
   if (cleanLocation.toLowerCase().startsWith(`${cleanPoi.toLowerCase()} ·`)) return cleanLocation;
 
   return `${cleanPoi} · ${cleanLocation}`;
+};
+
+const getPoiName = (item: any) =>
+  item.name ||
+  item.address?.amenity ||
+  item.address?.tourism ||
+  item.address?.building ||
+  item.address?.road ||
+  item.display_name?.split(",")[0] ||
+  "Lugar";
+
+const getPoiArea = (item: any) => {
+  const address = item.address ?? {};
+  const parts = [
+    address.city || address.town || address.village || address.municipality,
+    address.state || address.county,
+    address.country,
+  ].filter(Boolean);
+
+  return Array.from(new Set(parts)).join(", ");
+};
+
+const mapPoiResult = (item: any): PoiSuggestion => {
+  const name = getPoiName(item);
+  const area = getPoiArea(item);
+
+  return {
+    id: String(item.place_id ?? item.osm_id ?? item.display_name),
+    name,
+    area,
+    displayName: area ? `${name} · ${area}` : String(item.display_name ?? name),
+  };
 };
 
 export function Community() {
@@ -195,7 +232,9 @@ export function Community() {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
   const [publishCooldownUntil, setPublishCooldownUntil] = useState(0);
-  const [isLocatingPoi, setIsLocatingPoi] = useState(false);
+  const [poiResults, setPoiResults] = useState<PoiSuggestion[]>([]);
+  const [isSearchingPoi, setIsSearchingPoi] = useState(false);
+  const [poiSearchError, setPoiSearchError] = useState<string | null>(null);
   const [cooldownTick, setCooldownTick] = useState(0);
   const [likePendingByPost, setLikePendingByPost] = useState<Record<string, boolean>>({});
   const [savePendingByPost, setSavePendingByPost] = useState<Record<string, boolean>>({});
@@ -259,6 +298,55 @@ export function Community() {
 
     return () => window.clearInterval(interval);
   }, [isPublishCooldownActive]);
+
+  useEffect(() => {
+    const query = newPost.poi.trim();
+
+    if (!showCreatePost || query.length < 3) {
+      setPoiResults([]);
+      setPoiSearchError(null);
+      setIsSearchingPoi(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setIsSearchingPoi(true);
+      setPoiSearchError(null);
+
+      try {
+        const params = new URLSearchParams({
+          q: query,
+          format: "jsonv2",
+          addressdetails: "1",
+          countrycodes: "co",
+          limit: "6",
+          "accept-language": "es",
+        });
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) throw new Error("No se pudieron buscar lugares.");
+
+        const data = await response.json();
+        setPoiResults((Array.isArray(data) ? data : []).map(mapPoiResult));
+      } catch (error: any) {
+        if (error?.name === "AbortError") return;
+
+        console.error("Error searching POIs:", error);
+        setPoiResults([]);
+        setPoiSearchError("No pudimos cargar sugerencias. Puedes escribir el lugar manualmente.");
+      } finally {
+        if (!controller.signal.aborted) setIsSearchingPoi(false);
+      }
+    }, 450);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [newPost.poi, showCreatePost]);
 
   const toggleLike = async (id: string) => {
     if (likePendingByPost[id]) return;
@@ -481,29 +569,14 @@ export function Community() {
     reader.readAsDataURL(file);
   };
 
-  const useCurrentLocationAsPoi = () => {
-    if (!navigator.geolocation) {
-      window.alert("Tu navegador no permite obtener la ubicación actual.");
-      return;
-    }
-
-    setIsLocatingPoi(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude.toFixed(5);
-        const lng = position.coords.longitude.toFixed(5);
-        setNewPost((prev) => ({
-          ...prev,
-          poi: `GPS ${lat}, ${lng}`,
-        }));
-        setIsLocatingPoi(false);
-      },
-      () => {
-        setIsLocatingPoi(false);
-        window.alert("No pudimos obtener tu ubicación. Puedes escribir el punto de interés manualmente.");
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
+  const selectPoi = (poi: PoiSuggestion) => {
+    setNewPost((prev) => ({
+      ...prev,
+      poi: poi.name,
+      location: poi.area || prev.location,
+    }));
+    setPoiResults([]);
+    setPoiSearchError(null);
   };
 
   const createPost = async () => {
@@ -621,6 +694,8 @@ export function Community() {
     setShowCreatePost(false);
     setEditingPost(null);
     setNewPost({ poi: "", location: "", caption: "", image: "" });
+    setPoiResults([]);
+    setPoiSearchError(null);
   };
 
   return (
@@ -890,13 +965,20 @@ export function Community() {
       </motion.button>
 
       {showCreatePost && (
-        <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-center justify-center overflow-y-auto p-4">
+        <div
+          className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-end sm:items-center justify-center overflow-hidden px-3 py-3 sm:p-4"
+          style={{
+            paddingTop: "calc(var(--safe-top) + 0.75rem)",
+            paddingBottom: "calc(var(--safe-bottom) + 0.75rem)",
+          }}
+        >
           <motion.div
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            className="w-full max-w-lg max-h-[calc(100vh-2rem)] bg-white rounded-2xl shadow-2xl border border-purple-100 overflow-hidden flex flex-col"
+            className="w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-purple-100 overflow-hidden flex flex-col"
+            style={{ maxHeight: "calc(100dvh - var(--safe-top) - var(--safe-bottom) - 1.5rem)" }}
           >
-            <div className="p-4 border-b border-purple-100 flex items-center justify-between">
+            <div className="flex-shrink-0 p-4 border-b border-purple-100 flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">Nueva publicación</p>
                 <h2 className="font-semibold text-slate-900">Comparte tu viaje</h2>
@@ -911,31 +993,45 @@ export function Community() {
               </button>
             </div>
 
-            <div className="p-4 space-y-4 overflow-y-auto">
+            <div className="flex-1 min-h-0 p-4 space-y-4 overflow-y-auto overscroll-contain">
               <div className="rounded-xl border border-purple-100 bg-purple-50/50 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <span className="text-sm font-medium text-slate-700">POI / punto exacto</span>
-                    <p className="text-xs text-slate-500">Agrega el lugar especifico dentro de la ubicación.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={useCurrentLocationAsPoi}
-                    disabled={isLocatingPoi}
-                    className="flex-shrink-0 rounded-lg border border-purple-200 bg-white px-3 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isLocatingPoi ? "Ubicando..." : "Usar GPS"}
-                  </button>
+                <div>
+                  <span className="text-sm font-medium text-slate-700">Lugar / POI</span>
+                  <p className="text-xs text-slate-500">Busca un lugar real de Colombia, como en una etiqueta de ubicación.</p>
                 </div>
                 <div className="mt-3 flex items-center gap-2">
                   <MapPin className="h-4 w-4 flex-shrink-0 text-purple-500" />
                   <input
                     value={newPost.poi}
                     onChange={(event) => setNewPost((prev) => ({ ...prev, poi: event.target.value }))}
-                    placeholder="Ej: Mirador Alto de la Cruz"
+                    placeholder="Ej: Iglesia Pereira"
                     className="w-full rounded-lg border border-purple-100 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-purple-200"
                   />
                 </div>
+                {(isSearchingPoi || poiResults.length > 0 || poiSearchError) && (
+                  <div className="mt-3 overflow-hidden rounded-xl border border-purple-100 bg-white">
+                    {isSearchingPoi && (
+                      <p className="px-3 py-2 text-xs text-slate-500">Buscando lugares en Colombia...</p>
+                    )}
+                    {!isSearchingPoi && poiSearchError && (
+                      <p className="px-3 py-2 text-xs text-amber-700">{poiSearchError}</p>
+                    )}
+                    {!isSearchingPoi && !poiSearchError && poiResults.map((poi) => (
+                      <button
+                        key={poi.id}
+                        type="button"
+                        onClick={() => selectPoi(poi)}
+                        className="w-full border-b border-slate-100 px-3 py-2 text-left last:border-b-0 hover:bg-purple-50"
+                      >
+                        <span className="block text-sm font-semibold text-slate-900">{poi.name}</span>
+                        {poi.area && <span className="block text-xs text-slate-500">{poi.area}</span>}
+                      </button>
+                    ))}
+                    {!isSearchingPoi && !poiSearchError && poiResults.length === 0 && newPost.poi.trim().length >= 3 && (
+                      <p className="px-3 py-2 text-xs text-slate-500">No encontramos coincidencias. Puedes escribir el lugar manualmente.</p>
+                    )}
+                  </div>
+                )}
                 <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar pb-1">
                   {POI_SUGGESTIONS.map((poi) => (
                     <button
@@ -1006,6 +1102,8 @@ export function Community() {
                 </div>
               )}
 
+            </div>
+            <div className="flex-shrink-0 border-t border-purple-100 bg-white p-4">
               <button
                 onClick={editingPost ? saveEditedPost : createPost}
                 disabled={!canSubmitPost}
