@@ -605,6 +605,7 @@ export function AIChat() {
         .from("trips")
         .select("id, destination, start_date, end_date")
         .eq("id", lastTripId)
+        .eq("user_id", user.id)
         .single();
       if (byIdTrip) {
         targetTrip = byIdTrip;

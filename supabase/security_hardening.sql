@@ -138,6 +138,38 @@ alter table public.community_posts
     or image_url ~ '^data:image/(jpeg|png|webp|gif);base64,'
   );
 
+-- Trips must be private per user. A new account should never see seeded/demo trips or another user's history.
+alter table public.trips enable row level security;
+
+drop policy if exists "trips_select_own" on public.trips;
+create policy "trips_select_own"
+  on public.trips
+  for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "trips_insert_own" on public.trips;
+create policy "trips_insert_own"
+  on public.trips
+  for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "trips_update_own" on public.trips;
+create policy "trips_update_own"
+  on public.trips
+  for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "trips_delete_own" on public.trips;
+create policy "trips_delete_own"
+  on public.trips
+  for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
 create table if not exists public.community_notification_settings (
   user_id uuid primary key references auth.users(id) on delete cascade,
   community_notifications_enabled boolean not null default true,

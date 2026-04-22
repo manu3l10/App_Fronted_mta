@@ -56,9 +56,19 @@ export function Calendar() {
 
   useEffect(() => {
     const fetchTrips = async () => {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      const user = userData.user;
+
+      if (userError || !user) {
+        if (userError) console.error("Error fetching user for calendar:", userError);
+        setUpcomingTrips([]);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("trips")
         .select("id, destination, start_date, end_date")
+        .eq("user_id", user.id)
         .order("start_date", { ascending: true });
 
       if (error) {
@@ -160,10 +170,15 @@ export function Calendar() {
   };
 
   const deleteTrip = async (tripId: string | number) => {
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData.user;
+    if (!user) return;
+
     const { error } = await supabase
       .from("trips")
       .delete()
-      .eq("id", tripId);
+      .eq("id", tripId)
+      .eq("user_id", user.id);
 
     if (error) {
       console.error("Error deleting trip from calendar:", error);

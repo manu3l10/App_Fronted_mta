@@ -59,9 +59,20 @@ export function Itineraries() {
 
   const fetchItineraries = async () => {
     setLoading(true);
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    const user = userData.user;
+
+    if (userError || !user) {
+      if (userError) console.error("Error fetching user for itineraries:", userError);
+      setItineraries([]);
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('trips')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -99,10 +110,15 @@ export function Itineraries() {
   };
 
   const deleteItinerary = async (id: string | number) => {
+    const { data: userData } = await supabase.auth.getUser();
+    const user = userData.user;
+    if (!user) return;
+
     const { error } = await supabase
       .from('trips')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user.id);
 
     if (error) {
       console.error("Error deleting itinerary:", error);

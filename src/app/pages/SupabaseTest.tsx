@@ -53,9 +53,17 @@ export function SupabaseTest() {
 
     const handleGetTrips = async () => {
         setStatus("Obteniendo viajes...");
+        const { data: userData } = await supabase.auth.getUser();
+
+        if (!userData.user) {
+            setStatus("Error: Debes iniciar sesión primero");
+            return;
+        }
+
         const { data, error } = await supabase
             .from('trips')
-            .select('*');
+            .select('*')
+            .eq('user_id', userData.user.id);
 
         console.log("VIAJES:", data);
         if (error) setStatus("Error SELECT: " + error.message);
