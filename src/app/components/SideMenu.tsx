@@ -74,7 +74,12 @@ export function SideMenu({ isOpen, onClose }: SideMenuProps) {
             exit={{ x: "-100%" }}
             transition={isMobile ? { duration: 0.25, ease: "easeOut" } : { type: "spring", damping: 25, stiffness: 300 }}
             className="fixed left-0 top-0 h-full w-[280px] md:w-80 z-50 shadow-2xl overflow-hidden"
-            style={{ willChange: "transform" }}
+            style={{
+              willChange: "transform",
+              paddingTop: "env(safe-area-inset-top)",
+              paddingBottom: "env(safe-area-inset-bottom)",
+              boxSizing: "border-box",
+            }}
           >
             {/* Background container */}
             <div className="h-full bg-slate-900 border-r border-white/5 flex flex-col">
