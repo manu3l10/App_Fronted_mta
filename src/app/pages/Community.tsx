@@ -960,6 +960,7 @@ export function Community() {
         whileTap={{ scale: 0.9 }}
         onClick={() => setShowCreatePost(true)}
         className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full shadow-xl flex items-center justify-center z-40"
+        style={{ bottom: "calc(var(--safe-bottom) + 1.5rem)" }}
       >
         <Plus className="w-6 h-6" />
       </motion.button>
@@ -967,6 +968,7 @@ export function Community() {
       {showCreatePost && (
         <div
           className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm flex items-end sm:items-center justify-center overflow-hidden px-3 py-3 sm:p-4"
+          onClick={closePostModal}
           style={{
             paddingTop: "calc(var(--safe-top) + 0.75rem)",
             paddingBottom: "calc(var(--safe-bottom) + 0.75rem)",
@@ -975,13 +977,24 @@ export function Community() {
           <motion.div
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
+            onClick={(event) => event.stopPropagation()}
             className="w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-purple-100 overflow-hidden flex flex-col"
-            style={{ maxHeight: "calc(100dvh - var(--safe-top) - var(--safe-bottom) - 1.5rem)" }}
+            style={{
+              height: "min(760px, calc(100dvh - var(--safe-top) - var(--safe-bottom) - 1.5rem))",
+              maxHeight: "calc(100dvh - var(--safe-top) - var(--safe-bottom) - 1.5rem)",
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="community-post-modal-title"
           >
-            <div className="flex-shrink-0 p-4 border-b border-purple-100 flex items-center justify-between">
+            <div className="flex-shrink-0 border-b border-purple-100 bg-white p-4">
+              <div className="mx-auto mb-3 h-1 w-12 rounded-full bg-slate-200 sm:hidden" />
+              <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">Nueva publicación</p>
-                <h2 className="font-semibold text-slate-900">Comparte tu viaje</h2>
+                <p className="text-xs font-semibold uppercase tracking-wide text-purple-600">
+                  {editingPost ? "Editar publicación" : "Nueva publicación"}
+                </p>
+                <h2 id="community-post-modal-title" className="font-semibold text-slate-900">Comparte tu viaje</h2>
               </div>
               <button
                 onClick={closePostModal}
@@ -991,9 +1004,11 @@ export function Community() {
               >
                 <X className="w-5 h-5" />
               </button>
+              </div>
             </div>
 
-            <div className="flex-1 min-h-0 p-4 space-y-4 overflow-y-auto overscroll-contain">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4">
+              <div className="space-y-4 pb-3">
               <div className="rounded-xl border border-purple-100 bg-purple-50/50 p-3">
                 <div>
                   <span className="text-sm font-medium text-slate-700">Lugar / POI</span>
@@ -1009,7 +1024,7 @@ export function Community() {
                   />
                 </div>
                 {(isSearchingPoi || poiResults.length > 0 || poiSearchError) && (
-                  <div className="mt-3 overflow-hidden rounded-xl border border-purple-100 bg-white">
+                  <div className="mt-3 max-h-56 overflow-y-auto rounded-xl border border-purple-100 bg-white overscroll-contain">
                     {isSearchingPoi && (
                       <p className="px-3 py-2 text-xs text-slate-500">Buscando lugares en Colombia...</p>
                     )}
@@ -1101,13 +1116,13 @@ export function Community() {
                   <img src={newPost.image} alt="Vista previa" className="w-full h-full object-cover" />
                 </div>
               )}
-
+              </div>
             </div>
-            <div className="flex-shrink-0 border-t border-purple-100 bg-white p-4">
+            <div className="flex-shrink-0 border-t border-purple-100 bg-white p-4 shadow-[0_-12px_24px_rgba(15,23,42,0.06)]">
               <button
                 onClick={editingPost ? saveEditedPost : createPost}
                 disabled={!canSubmitPost}
-                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl text-sm font-semibold hover:shadow-lg transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmittingPost
                   ? (editingPost ? "Guardando..." : "Publicando...")
