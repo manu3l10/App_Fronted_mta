@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Send, Mic, Plane } from "lucide-react";
 import { useLocation, useNavigate } from "react-router";
@@ -63,6 +63,8 @@ export function AIChat() {
   ]);
   const [savingProposal, setSavingProposal] = useState(false);
   const [savingHotel, setSavingHotel] = useState(false);
+  const pendingChatActionRef = useRef(false);
+  const completedChatActionsRef = useRef<Set<string>>(new Set());
 
   const suggestions = [
     lang === "es"
@@ -160,6 +162,28 @@ export function AIChat() {
       },
     ];
 
+  const runChatActionOnce = async (
+    actionKey: string,
+    action: () => void | Promise<void>,
+    options: { keepCompletedOnError?: boolean } = {}
+  ) => {
+    if (pendingChatActionRef.current || completedChatActionsRef.current.has(actionKey)) return;
+
+    pendingChatActionRef.current = true;
+    completedChatActionsRef.current.add(actionKey);
+
+    try {
+      await action();
+    } catch (error) {
+      if (!options.keepCompletedOnError) {
+        completedChatActionsRef.current.delete(actionKey);
+      }
+      throw error;
+    } finally {
+      pendingChatActionRef.current = false;
+    }
+  };
+
   const DatePickerCard = ({ onConfirm }: { onConfirm: (startDate: string, endDate: string) => void }) => {
     const today = new Date().toISOString().slice(0, 10);
     const [startDate, setStartDate] = useState("");
@@ -178,7 +202,7 @@ export function AIChat() {
       }
 
       setError("");
-      onConfirm(startDate, endDate);
+      void onConfirm(startDate, endDate);
     };
 
     return (
@@ -299,6 +323,7 @@ export function AIChat() {
   };
 
   const saveFlightAlternativeForTrip = (request: ChatChangeRequest, option: FlightOption) => {
+    void runChatActionOnce(`change-flights:${request.tripId}`, () => {
     const previousDetails = getItineraryDetails(request.tripId) ?? { flights: [], hotel: null };
     saveItineraryDetails(request.tripId, {
       ...previousDetails,
@@ -320,9 +345,11 @@ export function AIChat() {
         ),
       },
     ]);
+    });
   };
 
   const saveHotelOptionForTrip = (request: ChatChangeRequest, option: HotelOption) => {
+    void runChatActionOnce(`change-hotel:${request.tripId}`, () => {
     const previousDetails = getItineraryDetails(request.tripId) ?? { flights: [], hotel: null };
     const hotel: HotelStay = {
       name: option.name,
@@ -352,6 +379,7 @@ export function AIChat() {
         ),
       },
     ]);
+    });
   };
 
   const buildFlightChangeCard = (request: ChatChangeRequest) => (
@@ -385,6 +413,7 @@ export function AIChat() {
   );
 
   const showFlightOptionsForDates = (startDate: string, endDate: string) => {
+    void runChatActionOnce(`show-flights:${startDate}:${endDate}`, () => {
     const options = buildEjeCafeteroFlightAlternatives(startDate, endDate);
     setMessages((prev) => [
       ...prev,
@@ -432,6 +461,7 @@ export function AIChat() {
         ),
       },
     ]);
+    });
   };
 
   const buildHotelChangeCard = (request: ChatChangeRequest) => (
@@ -439,6 +469,7 @@ export function AIChat() {
   );
 
   const showHotelOptionsForTrip = (request: ChatChangeRequest) => {
+    void runChatActionOnce(`show-hotels:${request.tripId}`, () => {
     setMessages((prev) => [
       ...prev,
       {
@@ -456,9 +487,11 @@ export function AIChat() {
         ),
       },
     ]);
+    });
   };
 
-  const declineHotelsForNow = () => {
+  const declineHotelsForNow = (actionKey = "decline-hotels") => {
+    void runChatActionOnce(actionKey, () => {
     setMessages((prev) => [
       ...prev,
       {
@@ -470,6 +503,7 @@ export function AIChat() {
         content: "Está bien. Quedo atento por si luego quieres agregar hotel u organizar otra parte del viaje.",
       },
     ]);
+    });
   };
 
   useEffect(() => {
@@ -495,6 +529,11 @@ export function AIChat() {
 
   const saveProposalToItineraries = async (payload: ChatCardPayload) => {
     if (savingProposal) return;
+    const actionKey = `save-flights:${payload.startDate}:${payload.endDate}`;
+    if (pendingChatActionRef.current || completedChatActionsRef.current.has(actionKey)) return;
+
+    pendingChatActionRef.current = true;
+    completedChatActionsRef.current.add(actionKey);
     setSavingProposal(true);
 
     const { data: userData } = await supabase.auth.getUser();
@@ -509,6 +548,8 @@ export function AIChat() {
         },
       ]);
       setSavingProposal(false);
+      pendingChatActionRef.current = false;
+      completedChatActionsRef.current.delete(actionKey);
       return;
     }
 
@@ -533,6 +574,8 @@ export function AIChat() {
         },
       ]);
       setSavingProposal(false);
+      pendingChatActionRef.current = false;
+      completedChatActionsRef.current.delete(actionKey);
       return;
     }
 
@@ -568,7 +611,7 @@ export function AIChat() {
                 Sí, agendar hotel
               </button>
               <button
-                onClick={declineHotelsForNow}
+                onClick={() => declineHotelsForNow(`decline-hotels:${insertedTrip.id}`)}
                 className="bg-white/10 border border-white/20 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/15 transition-colors"
               >
                 No, por ahora
@@ -580,10 +623,16 @@ export function AIChat() {
     ]);
 
     setSavingProposal(false);
+    pendingChatActionRef.current = false;
   };
 
   const saveHotelForLatestEjeTrip = async (option: HotelOption) => {
     if (savingHotel) return;
+    const actionKey = `save-latest-hotel:${option.name}`;
+    if (pendingChatActionRef.current || completedChatActionsRef.current.has(actionKey)) return;
+
+    pendingChatActionRef.current = true;
+    completedChatActionsRef.current.add(actionKey);
     setSavingHotel(true);
 
     const { data: userData } = await supabase.auth.getUser();
@@ -594,6 +643,8 @@ export function AIChat() {
         { type: "ai", content: "Para guardar el hotel, primero debes iniciar sesión." },
       ]);
       setSavingHotel(false);
+      pendingChatActionRef.current = false;
+      completedChatActionsRef.current.delete(actionKey);
       return;
     }
 
@@ -629,6 +680,8 @@ export function AIChat() {
           },
         ]);
         setSavingHotel(false);
+        pendingChatActionRef.current = false;
+        completedChatActionsRef.current.delete(actionKey);
         return;
       }
 
@@ -647,6 +700,8 @@ export function AIChat() {
         },
       ]);
       setSavingHotel(false);
+      pendingChatActionRef.current = false;
+      completedChatActionsRef.current.delete(actionKey);
       return;
     }
 
@@ -683,6 +738,7 @@ export function AIChat() {
     ]);
 
     setSavingHotel(false);
+    pendingChatActionRef.current = false;
   };
 
   const handleSend = () => {
@@ -727,7 +783,7 @@ export function AIChat() {
               Sí, agendar hotel
             </button>
             <button
-              onClick={declineHotelsForNow}
+              onClick={() => declineHotelsForNow(`decline-hotels:${lastTripId}`)}
               className="bg-white/10 border border-white/20 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-white/15 transition-colors"
             >
               No, por ahora
@@ -745,6 +801,7 @@ export function AIChat() {
         aiResponse.card = (
           <button
             onClick={() => {
+              void runChatActionOnce("start-eje-flow", () => {
               setMessages((prev) => [
                 ...prev,
                 {
@@ -757,6 +814,7 @@ export function AIChat() {
                   card: <DatePickerCard onConfirm={showFlightOptionsForDates} />,
                 },
               ]);
+              });
             }}
             className="w-full md:w-auto bg-gradient-to-r from-blue-500 via-cyan-500 to-indigo-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:shadow-lg transition-shadow"
           >
