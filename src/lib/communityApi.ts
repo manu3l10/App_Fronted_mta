@@ -74,6 +74,9 @@ export interface CommunityFeedSnapshot {
 }
 
 const COMMUNITY_FEED_CACHE_TTL_MS = 45_000;
+const COMMUNITY_POST_IMAGES_BUCKET = 'community-post-images';
+const COMMUNITY_POST_IMAGE_MAX_DIMENSION = 1920;
+const COMMUNITY_POST_IMAGE_QUALITY = 0.86;
 let cachedCommunityFeed: CommunityFeedSnapshot | null = null;
 let communityFeedRequest: Promise<CommunityFeedSnapshot> | null = null;
 
@@ -117,6 +120,101 @@ const getAuthorProfile = (user: User) => {
     authorName: String(authorName),
     authorAvatar: String(authorAvatar),
   };
+};
+
+const getImageExtension = (mimeType: string) => {
+  if (mimeType === 'image/png') return 'png';
+  if (mimeType === 'image/gif') return 'gif';
+  if (mimeType === 'image/webp') return 'webp';
+  return 'jpg';
+};
+
+const canvasToBlob = (canvas: HTMLCanvasElement, type: string, quality?: number) =>
+  new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+        return;
+      }
+
+      reject(new Error('No se pudo preparar la imagen para subirla.'));
+    }, type, quality);
+  });
+
+const loadImageElement = (file: File) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    const url = URL.createObjectURL(file);
+
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('No pudimos leer esa imagen. Intenta con otra foto.'));
+    };
+    image.src = url;
+  });
+
+const optimizeCommunityPostImage = async (file: File): Promise<{ blob: Blob; contentType: string }> => {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Selecciona una imagen valida para la publicación.');
+  }
+
+  if (file.type === 'image/gif') {
+    return { blob: file, contentType: file.type };
+  }
+
+  const image = await loadImageElement(file);
+  const ratio = Math.min(
+    1,
+    COMMUNITY_POST_IMAGE_MAX_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight)
+  );
+  const width = Math.max(1, Math.round(image.naturalWidth * ratio));
+  const height = Math.max(1, Math.round(image.naturalHeight * ratio));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Tu navegador no pudo procesar la imagen.');
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+
+  const contentType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+  const blob = await canvasToBlob(
+    canvas,
+    contentType,
+    contentType === 'image/jpeg' ? COMMUNITY_POST_IMAGE_QUALITY : undefined
+  );
+
+  return { blob, contentType };
+};
+
+export const uploadCommunityPostImage = async (file: File): Promise<string> => {
+  const user = await getCurrentUserOrThrow();
+  const { blob, contentType } = await optimizeCommunityPostImage(file);
+  const extension = getImageExtension(contentType);
+  const filePath = `${user.id}/${Date.now()}-${crypto.randomUUID()}.${extension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(COMMUNITY_POST_IMAGES_BUCKET)
+    .upload(filePath, blob, {
+      cacheControl: '31536000',
+      upsert: false,
+      contentType,
+    });
+
+  if (uploadError) throw uploadError;
+
+  const { data } = supabase.storage
+    .from(COMMUNITY_POST_IMAGES_BUCKET)
+    .getPublicUrl(filePath);
+
+  return data.publicUrl;
 };
 
 export const listCommunityPosts = async (): Promise<CommunityPostRecord[]> => {

@@ -18,6 +18,7 @@ import {
   toggleCommunityLike,
   toggleCommunitySave,
   updateCommunityPost,
+  uploadCommunityPostImage,
 } from "../../lib/communityApi";
 
 const POST_COOLDOWN_MS = 8000;
@@ -231,6 +232,7 @@ export function Community() {
   const [activePostMenu, setActivePostMenu] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [publishCooldownUntil, setPublishCooldownUntil] = useState(0);
   const [poiResults, setPoiResults] = useState<PoiSuggestion[]>([]);
   const [isSearchingPoi, setIsSearchingPoi] = useState(false);
@@ -254,9 +256,10 @@ export function Community() {
   const canSubmitPost = useMemo(
     () =>
       !isSubmittingPost &&
+      !isUploadingImage &&
       !isPublishCooldownActive &&
       Boolean(newPost.location.trim() && newPost.caption.trim() && newPost.image.trim()),
-    [isSubmittingPost, isPublishCooldownActive, newPost]
+    [isSubmittingPost, isUploadingImage, isPublishCooldownActive, newPost]
   );
 
   const fetchPosts = async (options: { forceRefresh?: boolean } = {}) => {
@@ -560,13 +563,20 @@ export function Community() {
     }
   };
 
-  const handleImageFile = (file?: File) => {
+  const handleImageFile = async (file?: File) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setNewPost((prev) => ({ ...prev, image: String(reader.result) }));
-    };
-    reader.readAsDataURL(file);
+    if (isUploadingImage) return;
+
+    try {
+      setIsUploadingImage(true);
+      const imageUrl = await uploadCommunityPostImage(file);
+      setNewPost((prev) => ({ ...prev, image: imageUrl }));
+    } catch (error: any) {
+      console.error("Error uploading community post image:", error);
+      window.alert(error?.message ?? "No se pudo subir la imagen.");
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
 
   const selectPoi = (poi: PoiSuggestion) => {
@@ -580,7 +590,7 @@ export function Community() {
   };
 
   const createPost = async () => {
-    if (isSubmittingPost) return;
+    if (isSubmittingPost || isUploadingImage) return;
     if (Date.now() < publishCooldownUntil) return;
 
     const location = buildLocationWithPoi(newPost.location, newPost.poi);
@@ -639,7 +649,7 @@ export function Community() {
 
   const saveEditedPost = async () => {
     if (!editingPost) return;
-    if (isSubmittingPost) return;
+    if (isSubmittingPost || isUploadingImage) return;
 
     const location = buildLocationWithPoi(newPost.location, newPost.poi);
     const caption = newPost.caption.trim();
@@ -690,7 +700,7 @@ export function Community() {
   };
 
   const closePostModal = () => {
-    if (isSubmittingPost) return;
+    if (isSubmittingPost || isUploadingImage) return;
     setShowCreatePost(false);
     setEditingPost(null);
     setNewPost({ poi: "", location: "", caption: "", image: "" });
@@ -1006,7 +1016,7 @@ export function Community() {
                 onClick={closePostModal}
                 className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 disabled:opacity-50"
                 aria-label="Cerrar"
-                disabled={isSubmittingPost}
+                disabled={isSubmittingPost || isUploadingImage}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1100,19 +1110,23 @@ export function Community() {
               <div className="space-y-2">
                 <span className="text-sm font-medium text-slate-700">Imagen</span>
                 <input
-                  value={newPost.image.startsWith("data:") ? "" : newPost.image}
+                  value={newPost.image}
                   onChange={(event) => setNewPost((prev) => ({ ...prev, image: event.target.value }))}
                   placeholder="Pega una URL de imagen"
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-purple-200"
+                  disabled={isUploadingImage}
                 />
-                <label className="flex items-center justify-center gap-2 border border-dashed border-purple-200 rounded-lg px-3 py-3 text-sm text-purple-700 cursor-pointer hover:bg-purple-50 transition-colors">
+                <label className={`flex items-center justify-center gap-2 border border-dashed border-purple-200 rounded-lg px-3 py-3 text-sm text-purple-700 transition-colors ${
+                  isUploadingImage ? "cursor-wait bg-purple-50 opacity-70" : "cursor-pointer hover:bg-purple-50"
+                }`}>
                   <ImageIcon className="w-4 h-4" />
-                  Subir imagen desde el equipo
+                  {isUploadingImage ? "Subiendo imagen..." : "Subir imagen desde el equipo"}
                   <input
                     type="file"
                     accept="image/*"
                     className="hidden"
                     onChange={(event) => handleImageFile(event.target.files?.[0])}
+                    disabled={isUploadingImage}
                   />
                 </label>
               </div>
@@ -1132,6 +1146,8 @@ export function Community() {
               >
                 {isSubmittingPost
                   ? (editingPost ? "Guardando..." : "Publicando...")
+                  : isUploadingImage
+                    ? "Subiendo imagen..."
                   : isPublishCooldownActive
                     ? `Espera ${publishCooldownSeconds}s para volver a publicar`
                     : (editingPost ? "Guardar cambios" : "Publicar")}

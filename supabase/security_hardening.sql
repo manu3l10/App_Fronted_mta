@@ -40,6 +40,104 @@ create unique index if not exists uq_community_notifications_unread_post_like
   on public.community_notifications(recipient_id, actor_id, post_id, type)
   where type = 'post_like' and read_at is null;
 
+-- Public images for community posts. Users can upload only into their own folder.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'community-post-images',
+  'community-post-images',
+  true,
+  10485760,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "community_post_images_public_read" on storage.objects;
+create policy "community_post_images_public_read"
+on storage.objects
+for select
+using (bucket_id = 'community-post-images');
+
+drop policy if exists "community_post_images_insert_own_folder" on storage.objects;
+create policy "community_post_images_insert_own_folder"
+on storage.objects
+for insert
+to authenticated
+with check (
+  bucket_id = 'community-post-images'
+  and auth.uid()::text = (storage.foldername(name))[1]
+);
+
+drop policy if exists "community_post_images_update_own_folder" on storage.objects;
+create policy "community_post_images_update_own_folder"
+on storage.objects
+for update
+to authenticated
+using (
+  bucket_id = 'community-post-images'
+  and auth.uid()::text = (storage.foldername(name))[1]
+)
+with check (
+  bucket_id = 'community-post-images'
+  and auth.uid()::text = (storage.foldername(name))[1]
+);
+
+drop policy if exists "community_post_images_delete_own_folder" on storage.objects;
+create policy "community_post_images_delete_own_folder"
+on storage.objects
+for delete
+to authenticated
+using (
+  bucket_id = 'community-post-images'
+  and auth.uid()::text = (storage.foldername(name))[1]
+);
+
+-- Server-side post throttling. This protects the community even if someone bypasses the UI cooldown.
+create or replace function public.enforce_community_post_rate_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  recent_posts_count integer;
+begin
+  if auth.uid() is null or new.user_id <> auth.uid() then
+    raise exception 'Not authenticated';
+  end if;
+
+  select count(*)
+    into recent_posts_count
+    from public.community_posts
+    where user_id = new.user_id
+      and created_at > now() - interval '1 minute';
+
+  if recent_posts_count >= 5 then
+    raise exception 'Estas publicando muy rapido. Intenta de nuevo en un minuto.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_community_posts_rate_limit on public.community_posts;
+create trigger trg_community_posts_rate_limit
+before insert on public.community_posts
+for each row execute function public.enforce_community_post_rate_limit();
+
+alter table public.community_posts
+  drop constraint if exists community_posts_image_url_safe;
+
+alter table public.community_posts
+  add constraint community_posts_image_url_safe
+  check (
+    image_url ~ '^https://'
+    or image_url ~ '^data:image/(jpeg|png|webp|gif);base64,'
+  );
+
 create table if not exists public.community_notification_settings (
   user_id uuid primary key references auth.users(id) on delete cascade,
   community_notifications_enabled boolean not null default true,
