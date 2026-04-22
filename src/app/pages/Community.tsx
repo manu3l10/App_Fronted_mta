@@ -157,6 +157,28 @@ const buildPostsFromSnapshot = (snapshot: CommunityFeedSnapshot): Post[] =>
     currentUserId: snapshot.currentUserId,
   });
 
+const POI_SUGGESTIONS = [
+  "Aeropuerto",
+  "Hotel",
+  "Restaurante",
+  "Mirador",
+  "Playa",
+  "Museo",
+  "Centro histórico",
+  "Parque natural",
+];
+
+const buildLocationWithPoi = (location: string, poi: string) => {
+  const cleanLocation = location.trim();
+  const cleanPoi = poi.trim();
+
+  if (!cleanPoi) return cleanLocation;
+  if (!cleanLocation) return cleanPoi;
+  if (cleanLocation.toLowerCase().startsWith(`${cleanPoi.toLowerCase()} ·`)) return cleanLocation;
+
+  return `${cleanPoi} · ${cleanLocation}`;
+};
+
 export function Community() {
   const navigate = useNavigate();
   const cachedFeed = getCachedCommunityFeed();
@@ -173,12 +195,14 @@ export function Community() {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [isSubmittingPost, setIsSubmittingPost] = useState(false);
   const [publishCooldownUntil, setPublishCooldownUntil] = useState(0);
+  const [isLocatingPoi, setIsLocatingPoi] = useState(false);
   const [cooldownTick, setCooldownTick] = useState(0);
   const [likePendingByPost, setLikePendingByPost] = useState<Record<string, boolean>>({});
   const [savePendingByPost, setSavePendingByPost] = useState<Record<string, boolean>>({});
   const [likePendingByComment, setLikePendingByComment] = useState<Record<string, boolean>>({});
   const [commentPendingByPost, setCommentPendingByPost] = useState<Record<string, boolean>>({});
   const [newPost, setNewPost] = useState({
+    poi: "",
     location: "",
     caption: "",
     image: "",
@@ -457,11 +481,36 @@ export function Community() {
     reader.readAsDataURL(file);
   };
 
+  const useCurrentLocationAsPoi = () => {
+    if (!navigator.geolocation) {
+      window.alert("Tu navegador no permite obtener la ubicación actual.");
+      return;
+    }
+
+    setIsLocatingPoi(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude.toFixed(5);
+        const lng = position.coords.longitude.toFixed(5);
+        setNewPost((prev) => ({
+          ...prev,
+          poi: `GPS ${lat}, ${lng}`,
+        }));
+        setIsLocatingPoi(false);
+      },
+      () => {
+        setIsLocatingPoi(false);
+        window.alert("No pudimos obtener tu ubicación. Puedes escribir el punto de interés manualmente.");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
+
   const createPost = async () => {
     if (isSubmittingPost) return;
     if (Date.now() < publishCooldownUntil) return;
 
-    const location = newPost.location.trim();
+    const location = buildLocationWithPoi(newPost.location, newPost.poi);
     const caption = newPost.caption.trim();
     const image = newPost.image.trim();
     if (!location || !caption || !image) return;
@@ -487,7 +536,7 @@ export function Community() {
       };
 
       setPosts((prev) => [createdPost, ...prev]);
-      setNewPost({ location: "", caption: "", image: "" });
+      setNewPost({ poi: "", location: "", caption: "", image: "" });
       setShowCreatePost(false);
       setEditingPost(null);
       setPublishCooldownUntil(Date.now() + POST_COOLDOWN_MS);
@@ -506,6 +555,7 @@ export function Community() {
   const startEditPost = (post: Post) => {
     setEditingPost(post);
     setNewPost({
+      poi: "",
       location: post.location,
       caption: post.caption,
       image: post.image,
@@ -518,7 +568,7 @@ export function Community() {
     if (!editingPost) return;
     if (isSubmittingPost) return;
 
-    const location = newPost.location.trim();
+    const location = buildLocationWithPoi(newPost.location, newPost.poi);
     const caption = newPost.caption.trim();
     const image = newPost.image.trim();
     if (!location || !caption || !image) return;
@@ -545,7 +595,7 @@ export function Community() {
       );
 
       setEditingPost(null);
-      setNewPost({ location: "", caption: "", image: "" });
+      setNewPost({ poi: "", location: "", caption: "", image: "" });
       setShowCreatePost(false);
     } catch (error: any) {
       console.error("Error updating post:", error);
@@ -570,7 +620,7 @@ export function Community() {
     if (isSubmittingPost) return;
     setShowCreatePost(false);
     setEditingPost(null);
-    setNewPost({ location: "", caption: "", image: "" });
+    setNewPost({ poi: "", location: "", caption: "", image: "" });
   };
 
   return (
@@ -787,7 +837,7 @@ export function Community() {
                                 if (event.key === "Enter") addReply(post.id, comment.id);
                               }}
                               placeholder={`Responder a ${comment.username}...`}
-                              className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-200"
+                              className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-purple-200"
                             />
                             <button
                               onClick={() => addReply(post.id, comment.id)}
@@ -814,7 +864,7 @@ export function Community() {
                     if (event.key === "Enter") addComment(post.id);
                   }}
                   placeholder="Añade un comentario..."
-                  className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-200"
+                  className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-purple-200"
                 />
                 <button
                   onClick={() => addComment(post.id)}
@@ -862,14 +912,61 @@ export function Community() {
             </div>
 
             <div className="p-4 space-y-4 overflow-y-auto">
+              <div className="rounded-xl border border-purple-100 bg-purple-50/50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <span className="text-sm font-medium text-slate-700">POI / punto exacto</span>
+                    <p className="text-xs text-slate-500">Agrega el lugar especifico dentro de la ubicación.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={useCurrentLocationAsPoi}
+                    disabled={isLocatingPoi}
+                    className="flex-shrink-0 rounded-lg border border-purple-200 bg-white px-3 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isLocatingPoi ? "Ubicando..." : "Usar GPS"}
+                  </button>
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <MapPin className="h-4 w-4 flex-shrink-0 text-purple-500" />
+                  <input
+                    value={newPost.poi}
+                    onChange={(event) => setNewPost((prev) => ({ ...prev, poi: event.target.value }))}
+                    placeholder="Ej: Mirador Alto de la Cruz"
+                    className="w-full rounded-lg border border-purple-100 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-purple-200"
+                  />
+                </div>
+                <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                  {POI_SUGGESTIONS.map((poi) => (
+                    <button
+                      key={poi}
+                      type="button"
+                      onClick={() => setNewPost((prev) => ({ ...prev, poi }))}
+                      className={`flex-shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        newPost.poi === poi
+                          ? "border-purple-500 bg-purple-600 text-white"
+                          : "border-purple-200 bg-white text-purple-700 hover:bg-purple-100"
+                      }`}
+                    >
+                      {poi}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <label className="block">
                 <span className="text-sm font-medium text-slate-700">Ubicación</span>
                 <input
                   value={newPost.location}
                   onChange={(event) => setNewPost((prev) => ({ ...prev, location: event.target.value }))}
                   placeholder="Ej: Salento, Colombia"
-                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-200"
+                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-purple-200"
                 />
+                {newPost.poi.trim() && newPost.location.trim() && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Se publicará como: <span className="font-medium text-slate-700">{buildLocationWithPoi(newPost.location, newPost.poi)}</span>
+                  </p>
+                )}
               </label>
 
               <label className="block">
@@ -879,7 +976,7 @@ export function Community() {
                   onChange={(event) => setNewPost((prev) => ({ ...prev, caption: event.target.value }))}
                   placeholder="Cuenta algo de tu experiencia..."
                   rows={3}
-                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none resize-none focus:ring-2 focus:ring-purple-200"
+                  className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none resize-none focus:ring-2 focus:ring-purple-200"
                 />
               </label>
 
@@ -889,7 +986,7 @@ export function Community() {
                   value={newPost.image.startsWith("data:") ? "" : newPost.image}
                   onChange={(event) => setNewPost((prev) => ({ ...prev, image: event.target.value }))}
                   placeholder="Pega una URL de imagen"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-purple-200"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-purple-200"
                 />
                 <label className="flex items-center justify-center gap-2 border border-dashed border-purple-200 rounded-lg px-3 py-3 text-sm text-purple-700 cursor-pointer hover:bg-purple-50 transition-colors">
                   <ImageIcon className="w-4 h-4" />
