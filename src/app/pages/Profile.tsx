@@ -18,6 +18,7 @@ export function Profile() {
   const [bioInput, setBioInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -209,9 +210,18 @@ export function Profile() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate("/");
-    window.location.reload();
+    if (logoutLoading) return;
+
+    setLogoutLoading(true);
+    const { error } = await supabase.auth.signOut({ scope: "local" });
+
+    if (error) {
+      console.error("Error signing out:", error);
+      setLogoutLoading(false);
+      return;
+    }
+
+    navigate("/", { replace: true });
   };
 
   const stats = [
@@ -490,9 +500,10 @@ export function Profile() {
           </button>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 bg-white/80 backdrop-blur-xl border border-gray-200 text-gray-700 py-3 rounded-xl font-medium hover:bg-white transition-colors"
+            disabled={logoutLoading}
+            className="w-full flex items-center justify-center gap-2 bg-white/80 backdrop-blur-xl border border-gray-200 text-gray-700 py-3 rounded-xl font-medium hover:bg-white transition-colors disabled:cursor-not-allowed disabled:opacity-70"
           >
-            <LogOut className="w-5 h-5" />
+            {logoutLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogOut className="w-5 h-5" />}
             Cerrar sesión
           </button>
         </motion.div>

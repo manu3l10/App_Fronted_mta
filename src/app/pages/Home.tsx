@@ -6,6 +6,7 @@ import { WelcomeScreen } from "../components/WelcomeScreen";
 import { AIChat } from "../components/AIChat";
 import { SideMenu } from "../components/SideMenu";
 import { useLanguage } from "../../contexts/LanguageContext";
+import { supabase } from "../../lib/supabase";
 import {
   CommunityNotificationRecord,
   listCommunityNotifications,
@@ -44,6 +45,7 @@ export function Home() {
   const { t } = useLanguage();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
   const [notifications, setNotifications] = useState<CommunityNotificationRecord[]>([]);
   const [notificationsError, setNotificationsError] = useState<string | null>(null);
 
@@ -133,6 +135,25 @@ export function Home() {
 
     setShowNotifications(false);
     navigate("/community");
+  };
+
+  const handleLogout = async () => {
+    if (logoutLoading) return;
+
+    setLogoutLoading(true);
+    setShowUserMenu(false);
+    setShowNotifications(false);
+    setMenuOpen(false);
+
+    const { error } = await supabase.auth.signOut({ scope: "local" });
+    if (error) {
+      console.error("Error signing out:", error);
+      setLogoutLoading(false);
+      return;
+    }
+
+    setNotifications([]);
+    navigate("/", { replace: true });
   };
 
   if (!isAuthReady) {
@@ -352,13 +373,16 @@ export function Home() {
                           Mi perfil
                         </button>
                         <button
-                          onClick={() => {
-                            supabase.auth.signOut();
-                          }}
-                          className="w-full flex items-center gap-2 p-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-sm font-medium"
+                          onClick={handleLogout}
+                          disabled={logoutLoading}
+                          className="w-full flex items-center gap-2 p-3 text-red-400 hover:bg-red-400/10 rounded-xl transition-colors text-sm font-medium disabled:cursor-not-allowed disabled:opacity-70"
                         >
                           <div className="w-8 h-8 rounded-lg bg-red-400/10 flex items-center justify-center">
-                            <Menu className="w-4 h-4 rotate-180" /> {/* Reusing Menu as Logout icon for simplicity */}
+                            {logoutLoading ? (
+                              <span className="h-4 w-4 rounded-full border-2 border-red-300/70 border-t-transparent animate-spin" />
+                            ) : (
+                              <Menu className="w-4 h-4 rotate-180" />
+                            )}
                           </div>
                           {t('home.logout')}
                         </button>
