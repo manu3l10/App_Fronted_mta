@@ -1,8 +1,12 @@
 import { motion, AnimatePresence } from "motion/react";
-import { Mail, Lock, UserPlus, LogIn, Loader2 } from "lucide-react";
+import { Mail, Lock, UserPlus, LogIn, Loader2, Check } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLanguage } from "../../contexts/LanguageContext";
-import { supabase } from "../../lib/supabase";
+import {
+  getRememberAccountPreference,
+  setRememberAccountPreference,
+  supabase,
+} from "../../lib/supabase";
 
 const OAUTH_ERROR_KEYS = ["error", "error_code", "error_description"];
 
@@ -124,6 +128,7 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLogin, setIsLogin] = useState(true);
+  const [rememberAccount, setRememberAccount] = useState(() => getRememberAccountPreference());
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
@@ -132,6 +137,7 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setRememberAccountPreference(rememberAccount);
 
     try {
       if (isLogin) {
@@ -171,6 +177,7 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
   const handleGoogleAuth = async () => {
     setGoogleLoading(true);
     setError("");
+    setRememberAccountPreference(rememberAccount);
 
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -248,6 +255,23 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
 
           <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 md:p-7 shadow-2xl">
             <h2 className="text-xl font-bold text-white mb-6 text-center">Continúa tu viaje</h2>
+
+            <label className="mb-5 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left active:scale-[0.99] transition">
+              <span>
+                <span className="block text-sm font-semibold text-white">Recordar cuenta</span>
+                <span className="block text-xs text-gray-400">Mantener la sesión abierta en este dispositivo.</span>
+              </span>
+              <span className="relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg border border-white/20 bg-slate-950/60">
+                <input
+                  type="checkbox"
+                  checked={rememberAccount}
+                  onChange={(event) => setRememberAccount(event.target.checked)}
+                  className="peer sr-only"
+                />
+                <span className="absolute inset-0 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 opacity-0 transition-opacity peer-checked:opacity-100" />
+                <Check className="relative z-10 h-4 w-4 text-white opacity-0 transition-opacity peer-checked:opacity-100" />
+              </span>
+            </label>
 
             <div className="mb-6">
               <button
